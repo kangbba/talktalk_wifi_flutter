@@ -119,8 +119,8 @@ Future<bool?> askDialogColumn(BuildContext context, Widget contentWidget, String
                     width: 250,
                     height: 50,
                     decoration: BoxDecoration(
+                      color: Colors.black45,
                       borderRadius: BorderRadius.circular(20), // 원하는 라운드값 설정
-                      color: Colors.white, // 배경색 설정
                     ),
                     child: Align(
                       alignment: Alignment.center,
