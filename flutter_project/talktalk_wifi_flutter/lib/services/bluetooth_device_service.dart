@@ -1,4 +1,5 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -7,6 +8,8 @@ import '../secrets/secret_device_keys.dart';
 
 class BluetoothDeviceService {
   // 알림 리스너를 관리하기 위한 변수
+
+
   StreamSubscription<List<int>>? notificationSubscription;
   bool isActionExecuting = false; // 액션이 실행 중인지 확인하는 플래그
   Timer? actionCooldownTimer; // 액션의 연속 실행을 방지하기 위한 타이머
@@ -62,33 +65,39 @@ class BluetoothDeviceService {
     }
   }
 
+
   static Future<BluetoothDevice?> scanPreConnectedBleDevice(String productName) async {
-    // Bonded Devices 검색
-    List<BluetoothDevice> bondedDevices = await FlutterBluePlus.bondedDevices;
-    debugLog('Bonded Devices: ${bondedDevices.length}');
-    for (BluetoothDevice device in bondedDevices) {
-      debugLog('Bonded Device: ${device.advName}');
-      if (device.advName.contains(productName)) {
-        debugLog('Found matching bonded device: ${device.advName}');
-        return device;
-      }
-    }
+    // SharedPreferences에서 최근에 저장된 기기 이름 가져오기
+    final prefs = await SharedPreferences.getInstance();
+    String? recentDeviceName = prefs.getString('recentDevice'); // 최근 연결된 기기 이름을 shared data에서 불러옴
+
 
     // Connected Devices 검색
     List<BluetoothDevice> connectedDevices = FlutterBluePlus.connectedDevices;
     debugLog('Connected Devices: ${connectedDevices.length}');
-    for (BluetoothDevice device in connectedDevices) {
-      debugLog('Connected Device: ${device.advName}');
-      if (device.advName.contains(productName)) {
-        debugLog('Found matching connected device: ${device.advName}');
-        return device;
-      }
+    if (connectedDevices.isNotEmpty) {
+      // 첫 번째 connected device를 연결
+      BluetoothDevice device = connectedDevices.first;
+      debugLog('Connected Device 연결: ${device.advName}');
+      return device;
+    }
+    // Bonded Devices 검색
+    List<BluetoothDevice> bondedDevices = await FlutterBluePlus.bondedDevices;
+    debugLog('Bonded Devices: ${bondedDevices.length}');
+    if (bondedDevices.isNotEmpty) {
+      // 첫 번째 bonded device를 연결
+      BluetoothDevice device = bondedDevices.first;
+      debugLog('Bonded Device 연결: ${device.advName}');
+      return device;
     }
 
     // 일치하는 디바이스를 찾지 못했을 경우
-    debugLog('No matching pre-connected device found.');
+    debugLog('일치하는 기기를 찾지 못했습니다.');
     return null;
   }
+
+
+
 
   static Future<ScanResult?> scanNearBleDevicesByProductName(String productName, int timeoutSeconds) async {
     Completer<ScanResult?> completer = Completer<ScanResult?>();
@@ -175,7 +184,7 @@ class BluetoothDeviceService {
     }
     try {
       await bluetoothDevice.connect();
-      debugLog("Connected to device: ${bluetoothDevice.name}");
+      debugLog("Connected to device: ${bluetoothDevice.platformName}");
     } catch (e) {
       debugLog('Failed to connect to BLE device: $e');
     }

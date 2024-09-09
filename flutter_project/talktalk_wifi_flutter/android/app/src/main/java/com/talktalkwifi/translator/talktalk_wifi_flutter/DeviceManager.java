@@ -70,9 +70,9 @@ public class DeviceManager {
                     break;
             }
         };
-        audioManager.requestAudioFocus(new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener(audioFocusChangeListener)
-                .build());
+//        audioManager.requestAudioFocus(new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+//                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+//                .build());
     }
 
     @RequiresApi(Build.VERSION_CODES.S)
@@ -138,6 +138,7 @@ public class DeviceManager {
 
     @RequiresApi(Build.VERSION_CODES.S)
     public boolean setAudioRouteMobile() {
+        System.out.println("DEVICE MANAGER : setAudioRouteMobile 호출");
         AudioDeviceInfo[] outputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
 
         for (AudioDeviceInfo device : outputDevices) {
@@ -156,7 +157,7 @@ public class DeviceManager {
             audioManager.stopBluetoothSco();
             audioManager.setMode(AudioManager.MODE_NORMAL);
             audioManager.setSpeakerphoneOn(true);
-            audioManager.setCommunicationDevice(selectedDevice);
+            audioManager.clearCommunicationDevice(); // setCommunicationDevice(null) 대신 clearCommunicationDevice() 사용
             System.out.println("Audio route successfully set to " + selectedDevice.getProductName());
             return true;
         } else {
@@ -168,6 +169,7 @@ public class DeviceManager {
 
     @RequiresApi(Build.VERSION_CODES.S)
     public boolean setAudioRouteESPHFP(String deviceName) {
+        System.out.println("DEVICE MANAGER : setAudioRouteESPHFP 호출");
         AudioDeviceInfo[] outputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
 
         for (AudioDeviceInfo device : outputDevices) {

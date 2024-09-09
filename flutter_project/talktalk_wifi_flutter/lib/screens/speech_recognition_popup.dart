@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:simple_ripple_animation/simple_ripple_animation.dart';
+
 import '../languages/language_control.dart';
-import '../services/speech_recognition_control.dart';
-import '../utils/simple_separator.dart';
-import '../utils/menuconfig.dart';
-import '../utils/utils.dart';
 
 class SpeechRecognitionPopUp extends StatefulWidget {
   final String titleText;
@@ -14,134 +14,135 @@ class SpeechRecognitionPopUp extends StatefulWidget {
   final IconData icon;
   final Color backgroundColor;
   final Color iconColor;
-  final VoidCallback? onCanceled; // onCanceled 콜백 추가
-  final VoidCallback? onCompleted; // onCompleted 콜백 추가
+  final VoidCallback? onCanceled;
+  final VoidCallback? onCompleted;
 
   const SpeechRecognitionPopUp({
-    super.key,
+    Key? key,
     required this.titleText,
     required this.langItem,
     required this.fontSize,
     required this.icon,
     required this.backgroundColor,
     required this.iconColor,
-    this.onCanceled, // onCanceled 콜백 초기화
-    this.onCompleted, // onCompleted 콜백 초기화
-  });
+    this.onCanceled,
+    this.onCompleted,
+  }) : super(key: key);
 
   @override
   State<SpeechRecognitionPopUp> createState() => _SpeechRecognitionPopUpState();
 }
 
 class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
-  SpeechRecognitionControl speechRecognitionControl = SpeechRecognitionControl();
-  TextEditingController textEditingController = TextEditingController();
-  bool backBtnAvailable = false;
-  Timer? timer;
-  Timer? noInputTimer;
+  final SpeechToText _speech = SpeechToText();
+  final TextEditingController _textController = TextEditingController();
+  bool _backBtnAvailable = false;
+  Timer? _backBtnTimer;
+  Timer? _noInputTimer;
 
   @override
   void initState() {
     super.initState();
-    speechRecognitionControl.activateSpeechRecognizer();
-    backBtnAvailable = false;
-    actingRoutine();
-    startTimer();
-    startNoInputTimer();
-  }
-
-  void startTimer() {
-    timer = Timer(const Duration(seconds: 1), () {
-      backBtnAvailable = true;
-      setState(() {});
-    });
-  }
-
-  void stopTimer() {
-    timer?.cancel();
-  }
-
-  void startNoInputTimer() {
-    noInputTimer = Timer(const Duration(seconds: 10), () {
-      if (mounted) {
-        debugLog("start no input timer activated");
-        cancelPopUp(); // 시간이 경과하면 팝업을 취소합니다.
-      }
-    });
-  }
-
-  void resetNoInputTimer() {
-    noInputTimer?.cancel();
-    startNoInputTimer();
+    _initializeSpeechRecognizer();
+    _startBackBtnTimer();
+    _startNoInputTimer();
   }
 
   @override
   void dispose() {
-    stopTimer();
-    stopNoInputTimer();
-    speechRecognitionControl.stop();
-    speechRecognitionControl.dispose();
-    textEditingController.dispose();
+    _speech.stop();
+    _textController.dispose();
+    _stopTimers();
     super.dispose();
   }
 
-  void stopNoInputTimer() {
-    noInputTimer?.cancel();
+  void _initializeSpeechRecognizer() {
+    _speech.initialize(
+      onError: _handleError,
+      onStatus: (status) => debugPrint('Speech Status: $status'),
+    ).then((available) {
+      if (available) {
+        _startListening();
+      } else {
+        debugPrint('Speech recognition not available');
+      }
+    });
   }
 
-  actingRoutine() async {
-    LanguageItem langItem = widget.langItem;
-    speechRecognitionControl.start(langItem.speechLocaleId);
-    int count = 0; // 카운트 변수 초기화
+  void _startListening() {
+    _speech.listen(
+      onResult: _handleResult,
+      localeId: widget.langItem.speechLocaleId,
+    );
+  }
 
-    while (true) {
-      String str = speechRecognitionControl.transcription;
-      if (str.length > 1000) {
-        debugLog("too much length");
-        break;
-      }
-      if (speechRecognitionControl.transcription.isNotEmpty) {
-        if (str != textEditingController.text) {
-          resetNoInputTimer(); // 입력이 있을 때마다 타이머 리셋
-          setState(() {
-            textEditingController.text = speechRecognitionControl.transcription;
-          });
-        }
-      }
-
-      count++;
-
-      if (speechRecognitionControl.isCompleted && count >= 10) {
-        debugLog(speechRecognitionControl.transcription);
-        count = 0;
-        break;
-      }
-
-      await Future.delayed(const Duration(milliseconds: 50));
+  void _handleResult(SpeechRecognitionResult result) {
+    if (result.recognizedWords.isNotEmpty) {
+      setState(() {
+        _textController.text = result.recognizedWords;
+      });
     }
 
-    for (int i = 0; i < 10; i++) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      if (mounted) {
-        setState(() {
-          textEditingController.text = speechRecognitionControl.transcription;
-        });
-      }
+    if (result.recognizedWords.length > 1000) {
+      debugPrint("Too much length");
+      _stopListening();
     }
 
-    speechRecognitionControl.stop();
-    if (mounted) {
-      completePopUp();
+    if (result.finalResult) {
+      debugPrint(result.recognizedWords);
+      _stopListening();
     }
+  }
+
+  void _handleError(SpeechRecognitionError error) {
+    debugPrint("Speech recognition error: ${error.errorMsg}");
+    _startListening(); // 에러 발생 시 음성 인식 재시작
+  }
+
+  void _stopListening() {
+    _speech.stop();
+    _completePopUp();
+  }
+
+  void _startBackBtnTimer() {
+    _backBtnTimer = Timer(const Duration(seconds: 1), () {
+      setState(() {
+        _backBtnAvailable = true;
+      });
+    });
+  }
+
+  void _startNoInputTimer() {
+    _noInputTimer = Timer(const Duration(seconds: 10), () {
+      _cancelPopUp();
+    });
+  }
+
+  void _stopTimers() {
+    _backBtnTimer?.cancel();
+    _noInputTimer?.cancel();
+  }
+
+  void _cancelPopUp() {
+    _stopTimers();
+    _speech.stop();
+    widget.onCanceled?.call();
+    Navigator.pop(context);
+  }
+
+  void _completePopUp() {
+    _stopTimers();
+    _speech.stop();
+    widget.onCompleted?.call();
+    Navigator.pop(context, _textController.text);
   }
 
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        debugLog("뒤로가기 막힘");
-        if (backBtnAvailable) {
-          cancelPopUp();
+        if (_backBtnAvailable) {
+          _cancelPopUp();
         }
         return false;
       },
@@ -149,104 +150,77 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
         padding: const EdgeInsets.all(22.0),
         child: Column(
           children: [
-            SizedBox(
-                height: 30,
-                child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 4.0, left: 0),
-                      child: backBtnAvailable
-                          ? InkWell(
-                          onTap: () {
-                            cancelPopUp();
-                          },
-                          child: const Icon(
-                            Icons.arrow_back_ios,
-                            color: Colors.black54,
-                            size: 32,
-                          ))
-                          : Container(),
-                    ))),
-            Text(
-              widget.titleText,
-              style: const TextStyle(fontSize: 16, height: 1.1, color: yourBackgroundColor),
-            ),
-            Expanded(
-                flex: 1,
-                child: Center(
-                  child: RippleAnimation(
-                    color: yourBackgroundColor,
-                    delay: const Duration(milliseconds: 200),
-                    repeat: true,
-                    minRadius: 30,
-                    ripplesCount: 4,
-                    duration: const Duration(milliseconds: 1800),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 60, // 원의 지름 설정
-                          height: 60, // 원의 지름 설정
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: widget.backgroundColor,
-                          ),
-                          child: Icon(
-                            widget.icon,
-                            color: widget.iconColor,
-                            size: 30,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )),
-            const SimpleSeparator(color: Colors.grey, height: 1, top: 0, bottom: 0),
-            Expanded(
-                flex: 3,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16),
-                  child: Container(
-                    alignment: Alignment.center,
-                    child: Align(
-                        alignment: Alignment.center,
-                        child: TextField(
-                          textAlign: TextAlign.center,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            isCollapsed: true, // 높이를 텍스트에 맞게 조절
-                          ),
-                          readOnly: true,
-                          maxLines: 6,
-                          controller: textEditingController,
-                          style: TextStyle(fontSize: widget.fontSize, height: 1.25),
-                        )),
-                  ),
-                )),
-            const SimpleSeparator(color: Colors.grey, height: 1, top: 0, bottom: 20),
+            _buildBackButton(),
+            _buildTitle(),
+            _buildRippleAnimation(),
+            _buildTextField(),
           ],
         ),
       ),
     );
   }
 
-  void cancelPopUp() {
-    stopTimer();
-    stopNoInputTimer();
-    speechRecognitionControl.stop();
-    if (widget.onCanceled != null) {
-      widget.onCanceled!(); // onCanceled 콜백 호출
-    }
-    Navigator.pop(context, ""); // 팝업 취소 시 null 값을 전달
+  Widget _buildBackButton() {
+    return SizedBox(
+      height: 30,
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: _backBtnAvailable
+            ? InkWell(
+          onTap: _cancelPopUp,
+          child: const Icon(
+            Icons.arrow_back_ios,
+            color: Colors.black54,
+            size: 32,
+          ),
+        )
+            : Container(),
+      ),
+    );
   }
 
-  void completePopUp() {
-    stopTimer();
-    stopNoInputTimer();
-    speechRecognitionControl.stop();
-    if (widget.onCompleted != null) {
-      widget.onCompleted!(); // onCompleted 콜백 호출
-    }
-    Navigator.pop(context, textEditingController.text); // 팝업 완료 시 텍스트 값 전달
+  Widget _buildTitle() {
+    return Text(
+      widget.titleText,
+      style: const TextStyle(fontSize: 16, height: 1.1, color: Colors.black),
+    );
+  }
+
+  Widget _buildRippleAnimation() {
+    return Expanded(
+      flex: 1,
+      child: Center(
+        child: RippleAnimation(
+          color: widget.backgroundColor,
+          delay: const Duration(milliseconds: 200),
+          repeat: true,
+          minRadius: 30,
+          ripplesCount: 4,
+          duration: const Duration(milliseconds: 1800),
+          child: Icon(
+            widget.icon,
+            color: widget.iconColor,
+            size: 30,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField() {
+    return Expanded(
+      flex: 3,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: TextField(
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(border: InputBorder.none),
+          readOnly: true,
+          maxLines: 6,
+          controller: _textController,
+          style: TextStyle(fontSize: widget.fontSize, height: 1.25),
+        ),
+      ),
+    );
   }
 }
