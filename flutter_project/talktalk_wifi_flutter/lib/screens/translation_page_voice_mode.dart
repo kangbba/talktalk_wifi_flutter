@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:talktalk_wifi_flutter/utils/loading_dialog.dart';
 import '../services/speech_recognition_control.dart';
@@ -287,6 +288,8 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
   onPressedRecordingBtn(LanguageControl languageControl, ActingOwner btnOwner) async {
     //Presetting
     textToSpeechControl.stop();
+    nowActingOwner = btnOwner;
+    bool isMine = btnOwner == ActingOwner.me;
     bool isConditionReady = await allConditionCheck();
     if (!isConditionReady) {
       onExitFromActingRoutine();
@@ -303,39 +306,51 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
       onExitFromActingRoutine();
       return;
     }
-    nowActingOwner = btnOwner;
-    bool isMine = btnOwner == ActingOwner.me;
     //Finding valid ble device by HFP device name
-    String targetDeviceName = allConnectedAudioDevices.isEmpty ? "" : allConnectedAudioDevices[0].name;
+    String targetDeviceName = allConnectedAudioDevices[0].name;
     //이미 연결된 BleDevice 검사
     BluetoothDevice? targetBleDevice = await BluetoothDeviceService.scanPreConnectedBleDevice(targetDeviceName);
     if (targetBleDevice == null) {
-      // loadingDialog를 사용하여 주변 기기 검색
-      bool success = await loadingDialog(
-        context,
-        "Searching for nearby devices",
-            () async {
-          // 이미 연결된 BleDevice가 없는 경우 주변 기기 검색
-          ScanResult? scanResult = await BluetoothDeviceService.scanNearBleDevicesByProductName(targetDeviceName, 5);
-          if (scanResult == null) {
-            // 팝업 띄우기
-            await simpleConfirmDialogA(context, "Please Check Your Bluetooth Connection", "OK");
-            onExitFromActingRoutine();
-            // 작업이 실패했음을 표시하기 위해 false 반환
-            return;
-          } else {
-            targetBleDevice = scanResult.device;
-          }
-        },
-      );
+      loadingDialog(context, "Searching for nearby devices");
+      //이미 연결된 BleDevice 없는 경우 주변 기기 검색
+      ScanResult? scanResult = await BluetoothDeviceService.scanNearBleDevicesByProductName(targetDeviceName, 3);
+      if (scanResult == null) {
+        await simpleConfirmDialogA(context, "No devices found nearby", "OK");
+        if(mounted){
+          Navigator.pop(context);
+        }
+        onExitFromActingRoutine();
+        return;
+      }
+      else{
+        targetBleDevice = scanResult.device;
+        if(mounted){
+          Navigator.pop(context);
+        }
+      }
     }
 
-    //BLE 디바이스 연결
-    await loadingDialog(context, "Connecting to $targetDeviceName", () async {
-      await BluetoothDeviceService.connectToDevice(targetBleDevice);
-    });
+    //말하기를 위한 라우팅 제어
+    if (isMine) {
+      debugLog("내 라우팅");
+      AudioDeviceService.setAudioRouteMobile();
+    }
+    else {
+      AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+      await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, "/micScreenOn");
+    }
 
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    //BLE 디바이스 연결
+    loadingDialog(context, "Connecting to $targetDeviceName");
+    await BluetoothDeviceService.connectToDevice(targetBleDevice);
+    recentBleDevice = targetBleDevice;
+
+    if(mounted){
+      Navigator.pop(context);
+    }
+    await Future.delayed(const Duration(milliseconds: 100));
 
     //말하기를 위한 라우팅 제어
     if (isMine) {

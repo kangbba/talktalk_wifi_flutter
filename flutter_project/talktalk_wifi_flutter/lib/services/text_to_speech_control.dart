@@ -19,6 +19,7 @@ class TextToSpeechControl extends ChangeNotifier{
   {
     flutterTts.setPitch(1.0);
     flutterTts.setSpeechRate(0.5);
+    speakWithLanguage("   ", 'en_US');
   }
   Future<void> changeLanguage(String langCode) async
   {
