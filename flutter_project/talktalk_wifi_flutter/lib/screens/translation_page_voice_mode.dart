@@ -4,6 +4,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:talktalk_wifi_flutter/utils/loading_dialog.dart';
 import '../services/speech_recognition_control.dart';
 import 'package:provider/provider.dart';
 import '../secrets/secret_device_keys.dart';
@@ -277,7 +278,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     if (result.first == ConnectivityResult.none) {
       // 네트워크 연결이 없는 경우 처리
       if (mounted) {
-        simpleConfirmDialog(context, 'Please check your network', "OK");
+        simpleConfirmDialogA(context, 'Please check your network', "OK");
       }
       return false;
     }
@@ -309,20 +310,32 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     //이미 연결된 BleDevice 검사
     BluetoothDevice? targetBleDevice = await BluetoothDeviceService.scanPreConnectedBleDevice(targetDeviceName);
     if (targetBleDevice == null) {
-      simpleLoadingDialog(context, "Searching for nearby devices");
-      //이미 연결된 BleDevice 없는 경우 주변 기기 검색
-      ScanResult? scanResult = await BluetoothDeviceService.scanNearBleDevicesByProductName(targetDeviceName, 5);
-      if (scanResult == null) {
-        await simpleConfirmDialogA(context, "No devices found nearby", "OK");
-        Navigator.of(context).pop();
-        onExitFromActingRoutine();
-        return;
-      }
-      else{
-        targetBleDevice = scanResult.device;
-        Navigator.of(context).pop();
-      }
+      // loadingDialog를 사용하여 주변 기기 검색
+      bool success = await loadingDialog(
+        context,
+        "Searching for nearby devices",
+            () async {
+          // 이미 연결된 BleDevice가 없는 경우 주변 기기 검색
+          ScanResult? scanResult = await BluetoothDeviceService.scanNearBleDevicesByProductName(targetDeviceName, 5);
+          if (scanResult == null) {
+            // 팝업 띄우기
+            await simpleConfirmDialogA(context, "Please Check Your Bluetooth Connection", "OK");
+            onExitFromActingRoutine();
+            // 작업이 실패했음을 표시하기 위해 false 반환
+            return;
+          } else {
+            targetBleDevice = scanResult.device;
+          }
+        },
+      );
     }
+
+    //BLE 디바이스 연결
+    await loadingDialog(context, "Connecting to $targetDeviceName", () async {
+      await BluetoothDeviceService.connectToDevice(targetBleDevice);
+    });
+
+    await Future.delayed(const Duration(milliseconds: 300));
 
     //말하기를 위한 라우팅 제어
     if (isMine) {
@@ -334,17 +347,9 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
       await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, "/micScreenOn");
     }
 
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    //BLE 디바이스 연결
-    simpleLoadingDialog(context, "Connecting to $targetDeviceName");
-    await BluetoothDeviceService.connectToDevice(targetBleDevice);
     recentBleDevice = targetBleDevice;
 
-    if(mounted){
-      Navigator.of(context).pop();
-    }
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 300));
     //음성인식 시작
     textToSpeechControl.changeLanguage(isMine ? languageControl.nowYourLanguageItem.speechLocaleId : languageControl.nowMyLanguageItem.speechLocaleId);
     String speechStr = await showVoicePopUp(btnOwner);
@@ -369,6 +374,14 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     setState(() {});
 
+
+    if (isMine) {
+      AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+    } else {
+      AudioDeviceService.setAudioRouteMobile();
+    }
+    await Future.delayed(const Duration(milliseconds: 500));
+
     //BLE 디바이스로 전송
     String translatedStr = languageControl.yourStr.trim();
     List<int> msgBytes = utf8.encode(translatedStr);
@@ -383,20 +396,13 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     String truncatedStr = utf8.decode(truncatedBytes);
     String fullMsgToSend = "${targetLanguageItem.uniqueId}:$truncatedStr;";
     await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, fullMsgToSend);
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (isMine) {
-      AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
-    } else {
-      AudioDeviceService.setAudioRouteMobile();
-    }
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 100));
 
     //perform text to speech
     String strToSpeech = isMine ? languageControl.yourStr : languageControl.myStr;
     LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
     await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 100));
     onExitFromActingRoutine();
     // 자동 전환 기능 추가
     if(autoSwitchSpeaker){
@@ -415,7 +421,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     String translatedStr = await translateControl.translateByAvailablePlatform(strToTranslate, fromLangItem, toLangItem, 4000);
     if (translatedStr.isEmpty) {
       if (mounted) {
-        simpleConfirmDialog(context, 'The translation server is temporarily unstable. Please retry.', 'OK');
+        simpleConfirmDialogA(context, 'The translation server is temporarily unstable. Please retry.', 'OK');
       }
       return false;
     }

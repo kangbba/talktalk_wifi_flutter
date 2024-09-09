@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-Future<bool?> simpleConfirmDialogA(BuildContext context, String message1, String positiveStr) async {
+Future<bool> simpleConfirmDialogA(BuildContext context, String message1, String positiveStr) async {
   return await showDialog<bool>(
     context: context,
     builder: (BuildContext context) {
@@ -8,22 +8,37 @@ Future<bool?> simpleConfirmDialogA(BuildContext context, String message1, String
         contentTextStyle: const TextStyle(fontSize: 14, color: Colors.black87),
         actionsAlignment: MainAxisAlignment.spaceEvenly,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Text(message1, style: const TextStyle(fontSize: 15), textAlign: TextAlign.center,),
+        content: Text(
+          message1,
+          style: const TextStyle(fontSize: 15),
+          textAlign: TextAlign.center,
+        ),
         actions: <Widget>[
           InkWell(
-              onTap: (){
-                Navigator.of(context).pop(false);
-              },
-              child: SizedBox(width : 250, height: 30, child: Align(alignment: Alignment.center, child: Text(positiveStr, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))))
+            onTap: () {
+              Navigator.of(context).pop(true); // Return true when tapped
+            },
+            child: SizedBox(
+              width: 250,
+              height: 30,
+              child: Align(
+                alignment: Alignment.center,
+                child: Text(
+                  positiveStr,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           ),
         ],
         actionsPadding: const EdgeInsets.only(bottom: 12),
       );
-
     },
-  );
+  ).then((value) => value ?? false); // Return false if null
 }
-Future<bool?> simpleConfirmDialogB(BuildContext context, String message1, String message2, String positiveStr) async {
+
+Future<bool> simpleConfirmDialogB(BuildContext context, String message1, String message2, String positiveStr) async {
   return await showDialog<bool>(
     context: context,
     builder: (BuildContext context) {
@@ -36,27 +51,172 @@ Future<bool?> simpleConfirmDialogB(BuildContext context, String message1, String
           height: 60,
           child: Column(
             children: [
-              Container(height: 10,),
-              Text(message1, style: const TextStyle(fontSize: 15), textAlign: TextAlign.center,),
-              Container(height: 10,),
-              Text(message2, style: const TextStyle(fontSize: 11), textAlign: TextAlign.center,),
+              const SizedBox(height: 10),
+              Text(
+                message1,
+                style: const TextStyle(fontSize: 15),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message2,
+                style: const TextStyle(fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
         actions: <Widget>[
           InkWell(
-              onTap: (){
-                Navigator.of(context).pop(false);
-              },
-              child: SizedBox(width : 250, height: 30, child: Align(alignment: Alignment.center, child: Text(positiveStr, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))))
+            onTap: () {
+              Navigator.of(context).pop(true); // Return true when tapped
+            },
+            child: SizedBox(
+              width: 250,
+              height: 30,
+              child: Align(
+                alignment: Alignment.center,
+                child: Text(
+                  positiveStr,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           ),
         ],
         actionsPadding: const EdgeInsets.only(bottom: 12),
       );
+    },
+  ).then((value) => value ?? false); // Return false if null
+}
 
+Future<bool?> askDialogColumn(BuildContext context, Widget contentWidget, String positiveStr, String negativeStr, double height) async {
+  return await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        contentTextStyle: const TextStyle(fontSize: 14, color: Colors.black),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: SizedBox(
+          width: 600, // 원하는 너비로 설정
+          height: height,
+          child: Center(
+            child: contentWidget,
+          ),
+        ),
+        actions: <Widget>[
+          Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop(true);
+                  },
+                  child: Container(
+                    width: 250,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20), // 원하는 라운드값 설정
+                      color: Colors.white, // 배경색 설정
+                    ),
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        positiveStr,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.normal),
+                      ),
+                    ),
+                  )
+              ),
+              InkWell(
+                onTap: () {
+                  Navigator.of(context).pop(false);
+                },
+                child: SizedBox(
+                  width: 100,
+                  height: 40, // 높이 조절
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: Text(negativeStr, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15)),
+                  ),
+                ),
+              ),
+              Container(height: 8,)
+            ],
+          )
+        ],
+      );
     },
   );
 }
+Future<bool?> askDialogRow(BuildContext context, Widget contentWidget, String positiveStr, String negativeStr, double height) async {
+  return await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        contentTextStyle: const TextStyle(fontSize: 14, color: Colors.black),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        alignment: Alignment.center,
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        content: SizedBox(
+          height: height,
+          width: 500,
+          child: Center(child: contentWidget),
+        ),
+        actions: <Widget>[
+          SizedBox(
+            height: 40,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop(false);
+                  },
+                  child: SizedBox(
+                    width: 100,
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        negativeStr,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 15, color: Colors.black87),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(width: 1, height : 20, color: Colors.grey,),
+                InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop(true);
+                    },
+                    child: Container(
+                      width: 100,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20), // 원하는 라운드값 설정
+                      ),
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: Text(
+                          positiveStr,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 15, color: Colors.black87, ),
+                        ),
+                      ),
+                    )
+                ),
+              ],),
+          )
+        ],
+      );
+    },
+  );
+}
+
 
 
 
