@@ -37,8 +37,11 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
   final SpeechToText _speech = SpeechToText();
   final TextEditingController _textController = TextEditingController();
   bool _backBtnAvailable = false;
+  bool _isPopCompleted = false; // Guard to prevent double pop invocation
   Timer? _backBtnTimer;
   Timer? _noInputTimer;
+  Timer? _textChangeTimer;
+  String _lastText = '';
 
   @override
   void initState() {
@@ -80,6 +83,7 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
     if (result.recognizedWords.isNotEmpty) {
       setState(() {
         _textController.text = result.recognizedWords;
+        _resetTextChangeTimer(); // Reset the timer whenever text changes
       });
     }
 
@@ -96,7 +100,7 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
 
   void _handleError(SpeechRecognitionError error) {
     debugPrint("Speech recognition error: ${error.errorMsg}");
-    _startListening(); // 에러 발생 시 음성 인식 재시작
+    _startListening(); // Restart speech recognition on error
   }
 
   void _stopListening() {
@@ -118,12 +122,27 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
     });
   }
 
+  void _resetTextChangeTimer() {
+    _textChangeTimer?.cancel();
+    _lastText = _textController.text;
+
+    // Start a timer that triggers after 1.5 seconds if the text hasn't changed
+    _textChangeTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (_textController.text == _lastText && _textController.text.isNotEmpty) {
+        _completePopUp();
+      }
+    });
+  }
+
   void _stopTimers() {
     _backBtnTimer?.cancel();
     _noInputTimer?.cancel();
+    _textChangeTimer?.cancel();
   }
 
   void _cancelPopUp() {
+    if (_isPopCompleted) return; // Prevent double pop invocation
+    _isPopCompleted = true; // Set flag to true after the first call
     _stopTimers();
     _speech.stop();
     widget.onCanceled?.call();
@@ -131,6 +150,8 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
   }
 
   void _completePopUp() {
+    if (_isPopCompleted) return; // Prevent double pop invocation
+    _isPopCompleted = true; // Set flag to true after the first call
     _stopTimers();
     _speech.stop();
     widget.onCompleted?.call();
@@ -139,13 +160,8 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_backBtnAvailable) {
-          _cancelPopUp();
-        }
-        return false;
-      },
+    return PopScope(
+      onPopInvokedWithResult: (popDisposition, result) async => false, // 뒤로 가기 버튼 무력화
       child: Padding(
         padding: const EdgeInsets.all(22.0),
         child: Column(

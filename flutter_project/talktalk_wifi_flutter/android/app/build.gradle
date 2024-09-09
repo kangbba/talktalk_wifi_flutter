@@ -38,14 +38,14 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
-//    signingConfigs {
-//        release {
-//            keyAlias = keystoreProperties['keyAlias']
-//            keyPassword = keystoreProperties['keyPassword']
-//            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-//            storePassword = keystoreProperties['storePassword']
-//        }
-//    }
+    signingConfigs {
+        release {
+            keyAlias = keystoreProperties['keyAlias']
+            keyPassword = keystoreProperties['keyPassword']
+            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword = keystoreProperties['storePassword']
+        }
+    }
     buildTypes {
         debug {
             // Includes the default ProGuard rules files that are packaged with
@@ -64,6 +64,7 @@ android {
             // Enables resource shrinking, which is performed by the
             // Android Gradle plugin.
             shrinkResources true
+            signingConfig signingConfigs.release
 
             // Includes the default ProGuard rules files that are packaged with
             // the Android Gradle plugin. To learn more, go to the section about

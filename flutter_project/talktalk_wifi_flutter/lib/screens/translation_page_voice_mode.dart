@@ -334,70 +334,69 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
       await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, "/micScreenOn");
     }
 
-    // await Future.delayed(const Duration(milliseconds: 500));
-    //
-    // //BLE 디바이스 연결
-    // simpleLoadingDialog(context, "Connecting to $targetDeviceName");
-    // await BluetoothDeviceService.connectToDevice(targetBleDevice);
-    // recentBleDevice = targetBleDevice;
-    //
-    // if(mounted){
-    //   Navigator.of(context).pop();
-    // }
-    //
-    //
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    //BLE 디바이스 연결
+    simpleLoadingDialog(context, "Connecting to $targetDeviceName");
+    await BluetoothDeviceService.connectToDevice(targetBleDevice);
+    recentBleDevice = targetBleDevice;
+
+    if(mounted){
+      Navigator.of(context).pop();
+    }
+    await Future.delayed(const Duration(milliseconds: 500));
     //음성인식 시작
     textToSpeechControl.changeLanguage(isMine ? languageControl.nowYourLanguageItem.speechLocaleId : languageControl.nowMyLanguageItem.speechLocaleId);
     String speechStr = await showVoicePopUp(btnOwner);
-    //
-    // //음성인식 완료 처리
-    // if (speechStr.isEmpty) {
-    //   onExitFromActingRoutine();
-    //   return;
-    // }
-    // if (isMine) {
-    //   languageControl.myStr = speechStr;
-    // } else {
-    //   languageControl.yourStr = speechStr;
-    // }
-    // setState(() {});
-    //
-    // //해석 수행
-    // bool succeed = await translateWithNowStatus(isMine);
-    // if (!succeed) {
-    //   onExitFromActingRoutine();
-    //   return;
-    // }
-    // setState(() {});
-    //
-    // //BLE 디바이스로 전송
-    // String translatedStr = languageControl.yourStr.trim();
-    // List<int> msgBytes = utf8.encode(translatedStr);
-    // debugLog("*MSG DATA LENGTH : ${msgBytes.length}");
-    // List<int> truncatedBytes;
-    // if (msgBytes.length > 500) {
-    //   truncatedBytes = msgBytes.sublist(0, 500);
-    // } else {
-    //   truncatedBytes = msgBytes;
-    // }
-    // LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
-    // String truncatedStr = utf8.decode(truncatedBytes);
-    // String fullMsgToSend = "${targetLanguageItem.uniqueId}:$truncatedStr;";
-    // await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, fullMsgToSend);
-    // await Future.delayed(const Duration(milliseconds: 500));
-    //
-    // if (isMine) {
-    //   AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
-    // } else {
-    //   AudioDeviceService.setAudioRouteMobile();
-    // }
-    // await Future.delayed(const Duration(milliseconds: 500));
-    //
-    // //perform text to speech
-    // String strToSpeech = isMine ? languageControl.yourStr : languageControl.myStr;
-    // LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
-    // await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
-    // await Future.delayed(const Duration(milliseconds: 300));
+
+    //음성인식 완료 처리
+    if (speechStr.isEmpty) {
+      onExitFromActingRoutine();
+      return;
+    }
+    if (isMine) {
+      languageControl.myStr = speechStr;
+    } else {
+      languageControl.yourStr = speechStr;
+    }
+    setState(() {});
+
+    //해석 수행
+    bool succeed = await translateWithNowStatus(isMine);
+    if (!succeed) {
+      onExitFromActingRoutine();
+      return;
+    }
+    setState(() {});
+
+    //BLE 디바이스로 전송
+    String translatedStr = languageControl.yourStr.trim();
+    List<int> msgBytes = utf8.encode(translatedStr);
+    debugLog("*MSG DATA LENGTH : ${msgBytes.length}");
+    List<int> truncatedBytes;
+    if (msgBytes.length > 500) {
+      truncatedBytes = msgBytes.sublist(0, 500);
+    } else {
+      truncatedBytes = msgBytes;
+    }
+    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
+    String truncatedStr = utf8.decode(truncatedBytes);
+    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$truncatedStr;";
+    await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, fullMsgToSend);
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (isMine) {
+      AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+    } else {
+      AudioDeviceService.setAudioRouteMobile();
+    }
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    //perform text to speech
+    String strToSpeech = isMine ? languageControl.yourStr : languageControl.myStr;
+    LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
+    await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
+    await Future.delayed(const Duration(milliseconds: 300));
     onExitFromActingRoutine();
     // 자동 전환 기능 추가
     if(autoSwitchSpeaker){
