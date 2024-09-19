@@ -313,39 +313,31 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     //Finding valid ble device by HFP device name
     String targetDeviceName = allConnectedAudioDevices[0].name;
-
-    BluetoothDevice? targetBleDevice;
-
-    //Bonded 를 최우선으로 한다.
-    BluetoothDevice? bondedDevice = await BluetoothDeviceService.getBondedDevice();
-    targetBleDevice = bondedDevice;
-
-    //Bonded가 없으면 주변에서 찾는다
-    if(targetBleDevice == null){
+    //이미 연결된 BleDevice 검사
+    BluetoothDevice? targetBleDevice = await BluetoothDeviceService.scanPreConnectedBleDevice(targetDeviceName);
+    if (targetBleDevice == null) {
       loadingDialog(context, "Searching for nearby devices");
-      BluetoothDevice? nearDevice = await BluetoothDeviceService.getNearDevice(targetDeviceName, 2500);
-      targetBleDevice = nearDevice;
-      if(mounted){
-        Navigator.pop(context);
+      //이미 연결된 BleDevice 없는 경우 주변 기기 검색
+      ScanResult? scanResult = await BluetoothDeviceService.scanNearBleDevicesByProductName(targetDeviceName, 5);
+      Navigator.of(context).pop();
+      if (scanResult == null) {
+        await simpleConfirmDialogA(context, "No devices found nearby", "OK");
+        onExitFromActingRoutine();
+        return;
+      }
+      else{
+        targetBleDevice = scanResult.device;
       }
     }
 
-    //그래도 없으면 작업을 수행하지않는다.
-    if(targetBleDevice == null){
-      await simpleConfirmDialogA(context, "No valid BLE Device", "OK");
-      onExitFromActingRoutine();
-      return;
-    }
+    //BLE 디바이스 연결
+    loadingDialog(context, "Connecting to $targetDeviceName");
+    await BluetoothDeviceService.connectToDevice(targetBleDevice);
 
-    //BLE 디바이스 연결 (targetBleDevice는 명백하게 존재한다)
-    if(targetBleDevice.isDisconnected){
-      loadingDialog(context, "Connecting to $targetDeviceName");
-      await BluetoothDeviceService.connectToDeviceThenListen(targetBleDevice);
-      if(mounted){
-        Navigator.pop(context);
-      }
-      await Future.delayed(const Duration(milliseconds: 300));
+    if(mounted){
+      Navigator.of(context).pop();
     }
+    await Future.delayed(const Duration(milliseconds: 500));
 
     //말하기를 위한 라우팅 제어
     if (isMine) {
@@ -354,6 +346,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     else {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+      debugLog("블루투스 연결이 되어있지 않아서 재연결 후 write 하겠음");
       await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, "/micScreenOn");
     }
     await Future.delayed(const Duration(milliseconds: 300));
@@ -410,7 +403,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     String strToSpeech = isMine ? languageControl.yourStr : languageControl.myStr;
     LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
     await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 1000));
     onExitFromActingRoutine();
     // 자동 전환 기능 추가
     if(autoSwitchSpeaker){

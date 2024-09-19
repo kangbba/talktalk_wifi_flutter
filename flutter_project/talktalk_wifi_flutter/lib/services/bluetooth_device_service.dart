@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -10,9 +7,6 @@ import '../secrets/secret_device_keys.dart';
 
 class BluetoothDeviceService {
   // 알림 리스너를 관리하기 위한 변수
-
-  static StreamSubscription<BluetoothConnectionState>? connectionSubscription;
-
   StreamSubscription<List<int>>? notificationSubscription;
   bool isActionExecuting = false; // 액션이 실행 중인지 확인하는 플래그
   Timer? actionCooldownTimer; // 액션의 연속 실행을 방지하기 위한 타이머
@@ -22,10 +16,10 @@ class BluetoothDeviceService {
   // TX 캐릭터리스틱의 알림을 감지하고 /askMic 메시지를 처리
   bool isHandlerStarted = false;
   Future<void> registerNotification(
-    BluetoothCharacteristic characteristic, Function() action) async {
+      BluetoothCharacteristic characteristic, Function() action) async {
     if(notificationSubscription != null){
       debugLog('Notification already started: ${characteristic.uuid}');
-       return;
+      return;
     }
     try {
       // 기존의 알림 구독이 있을 경우 해제(dispose)
@@ -68,108 +62,91 @@ class BluetoothDeviceService {
     }
   }
 
-  //
-  // static Future<BluetoothDevice?> scanPreConnectedBleDevice(String productName) async {
-  //   // Bonded Devices 검색
-  //   List<BluetoothDevice> bondedDevices = await FlutterBluePlus.bondedDevices;
-  //   debugLog('Bonded Devices: ${bondedDevices.length}');
-  //   if (bondedDevices.isNotEmpty) {
-  //     // 첫 번째 bonded device의 remoteId를 가져옴
-  //     String remoteId = bondedDevices[0].remoteId.str;
-  //     // 가져온 remoteId를 사용하여 BluetoothDevice 객체 생성
-  //     debugLog('Bonded Device ${remoteId} 사용하겠음');
-  //     BluetoothDevice device = BluetoothDevice.fromId(remoteId);
-  //     return device;
-  //   }
-  //   for (BluetoothDevice device in bondedDevices) {
-  //     debugLog('Bonded Device: adv name : ${device.advName} platform name ${device.platformName} isconnected ${device.isConnected}');
-  //
-  //     if (device.platformName.contains(productName)) {
-  //       debugLog('Found matching bonded device platformName: ${device.platformName}');
-  //       return device;
-  //     }
-  //   }
-  //
-  //   // Connected Devices 검색
-  //   List<BluetoothDevice> connectedDevices = FlutterBluePlus.connectedDevices;
-  //   debugLog('Connected Devices: ${connectedDevices.length}');
-  //   for (BluetoothDevice device in connectedDevices) {
-  //     debugLog('Connected Device: adv name : ${device.advName} platform name ${device.platformName} isconnected ${device.isConnected}');
-  //     if (device.platformName.contains(productName)) {
-  //       debugLog('Found matching connected device advName: ${device.platformName}');
-  //       return device;
-  //     }
-  //   }
-  //
-  //   // 일치하는 디바이스를 찾지 못했을 경우
-  //   debugLog('No matching pre-connected device found.');
-  //   return null;
-  // }
+  static Future<BluetoothDevice?> scanPreConnectedBleDevice(String productName) async {
+
+    // Connected Devices 검색
+    List<BluetoothDevice> connectedDevices = FlutterBluePlus.connectedDevices;
+    debugLog('Connected Devices: ${connectedDevices.length}');
+    for (BluetoothDevice device in connectedDevices) {
+      debugLog('찾고있는 productName: ${productName}');
+      debugLog('연결되어있는 디바이스 후보 이름: adv name : ${device.advName} / platform name : ${device.platformName}');
+      if (device.advName == productName || device.platformName == productName) {
+        debugLog('Found matching connected device: platformName ${device.platformName}');
+        return device;
+      }
+    }
 
 
-  //
-  //
-  // static Future<ScanResult?> scanNearBleDevicesByProductName(String productName, int timeoutSeconds) async {
-  //   Completer<ScanResult?> completer = Completer<ScanResult?>();
-  //   StreamSubscription? scanSubscription;
-  //
-  //   // 스캔 시작
-  //   FlutterBluePlus.startScan(timeout: Duration(seconds: timeoutSeconds));
-  //   debugLog('Finding BLE Device Name: $productName');
-  //
-  //   // 스캔 결과 수신 및 조건 검사
-  //   scanSubscription = FlutterBluePlus.scanResults.listen((List<ScanResult> results) {
-  //     debugLog('Scan results received: ${results.length}');
-  //     for (var result in results) {
-  //       // 디바이스의 advName이나 platformName 중 하나라도 주어진 productName과 일치하는지 확인
-  //       String advName = result.device.advName;
-  //       String platformName = result.device.platformName;
-  //
-  //       if (advName == productName) {
-  //         debugLog('Found matching device by advName: $advName');
-  //         if (!completer.isCompleted) {
-  //           completer.complete(result);  // 첫 번째 일치하는 디바이스를 찾으면 완료
-  //         }
-  //         break;
-  //       } else if (platformName == productName) {
-  //         debugLog('Found matching device by platformName: $platformName');
-  //         if (!completer.isCompleted) {
-  //           completer.complete(result);  // 첫 번째 일치하는 디바이스를 찾으면 완료
-  //         }
-  //         break;
-  //       }
-  //     }
-  //   });
-  //
-  //
-  //   // 지정된 시간 동안 디바이스를 찾지 못하면 null 반환
-  //   Future.delayed(Duration(seconds: timeoutSeconds)).then((_) {
-  //     if (!completer.isCompleted) {
-  //       debugLog('Timeout: No device matched the specified name within the given time.');
-  //       completer.complete(null);
-  //     }
-  //   });
-  //
-  //   // 스캔 완료 후 구독 해제 및 스캔 중지
-  //   completer.future.then((_) async {
-  //     await scanSubscription?.cancel();
-  //     FlutterBluePlus.stopScan();
-  //     debugLog('Scan stopped and subscription cancelled.');
-  //   });
-  //
-  //   return completer.future;
-  // }
+    // Bonded Devices 검색
+    List<BluetoothDevice> bondedDevices = await FlutterBluePlus.bondedDevices;
+    debugLog('Bonded Devices: ${bondedDevices.length}');
+    for (BluetoothDevice device in bondedDevices) {
+      debugLog('찾고있는 productName: ${productName}');
+      debugLog('본디드 디바이스 후보 이름: adv name : ${device.advName} / platform name : ${device.platformName}');
+      if (device.advName == productName || device.platformName == productName) {
+        debugLog('Found matching bonded device: platformName ${device.platformName}');
+        return device;
+      }
+    }
+
+
+    // 일치하는 디바이스를 찾지 못했을 경우
+    debugLog('No matching pre-connected device found.');
+    return null;
+  }
+
+  static Future<ScanResult?> scanNearBleDevicesByProductName(String productName, int timeoutSeconds) async {
+    Completer<ScanResult?> completer = Completer<ScanResult?>();
+    StreamSubscription? scanSubscription;
+
+    // 스캔 시작
+    FlutterBluePlus.startScan(timeout: Duration(seconds: timeoutSeconds));
+    debugLog('Finding BLE Device Name: $productName');
+
+    // 스캔 결과 수신 및 조건 검사
+    scanSubscription = FlutterBluePlus.scanResults.listen((List<ScanResult> results) {
+      debugLog('Scan results received: ${results.length}');
+      for (var result in results) {
+        // 디바이스의 advName이 주어진 productName과 정확히 일치하는지 확인
+        debugLog('Found BLE Device Name : ${result.device.advName}');
+        if (result.device.advName == productName) {
+          debugLog('Found matching device: ${result.device.advName}');
+          if (!completer.isCompleted) {
+            completer.complete(result);  // 첫 번째 일치하는 디바이스를 찾으면 완료
+          }
+          break;
+        }
+      }
+    });
+
+    // 지정된 시간 동안 디바이스를 찾지 못하면 null 반환
+    Future.delayed(Duration(seconds: timeoutSeconds)).then((_) {
+      if (!completer.isCompleted) {
+        debugLog('Timeout: No device matched the specified name within the given time.');
+        completer.complete(null);
+      }
+    });
+
+    // 스캔 완료 후 구독 해제 및 스캔 중지
+    completer.future.then((_) async {
+      await scanSubscription?.cancel();
+      FlutterBluePlus.stopScan();
+      debugLog('Scan stopped and subscription cancelled.');
+    });
+
+    return completer.future;
+  }
 
   static Future<void> writeMsgToBleDevice(BluetoothDevice? bluetoothDevice, String msg) async {
     if (bluetoothDevice == null) {
       debugLog("writeMsgToBleDevice :: device is null");
       return;
     }
-    if(!bluetoothDevice.isConnected){
-      debugLog("블루투스 연결이 되어있지 않아서 재연결 후 write 하겠음");
+    debugLog('Attempting to send message to ${bluetoothDevice.advName}, ${bluetoothDevice.remoteId}');
+    if (!bluetoothDevice.isConnected) {
       await bluetoothDevice.connect();
+      debugLog('Connection attempt to ${bluetoothDevice.advName}, ${bluetoothDevice.remoteId} completed.');
     }
-    debugLog('Attempting to send message to ${bluetoothDevice.platformName}, ${bluetoothDevice.remoteId}');
     try {
       // 연결된 기기를 찾고, 쓰기 특성에 메세지를 씁니다.
       List<BluetoothService> services = await bluetoothDevice.discoverServices();
@@ -196,116 +173,31 @@ class BluetoothDeviceService {
     }
   }
 
-  static Future<BluetoothDevice?> getBondedDevice() async{
-    List<BluetoothDevice> bondedDevices = await FlutterBluePlus.bondedDevices;
-    debugLog('Bonded Devices: ${bondedDevices.length}');
-    if (bondedDevices.isNotEmpty) {
-      // 첫 번째 bonded device의 remoteId를 가져옴
-      String remoteId = bondedDevices[0].remoteId.str;
-      // 가져온 remoteId를 사용하여 BluetoothDevice 객체 생성
-      debugLog('Bonded Device ${remoteId} 사용하겠음');
-      BluetoothDevice device = BluetoothDevice.fromId(remoteId);
-      return device;
-    }
-    else{
-      return null;
-    }
-  }
-  static Future<BluetoothDevice?> getNearDevice(
-      String productName, int durationMilliSec) async {
-    Completer<BluetoothDevice?> completer = Completer<BluetoothDevice?>();
-    StreamSubscription? scanSubscription;
-
-    // 스캔 시작
-    FlutterBluePlus.startScan(timeout: Duration(milliseconds: durationMilliSec));
-    debugLog('Finding BLE Device Name: $productName');
-
-    // 스캔 결과 수신 및 조건 검사
-    scanSubscription =
-        FlutterBluePlus.scanResults.listen((List<ScanResult> results) {
-          debugLog('Scan results received: ${results.length}');
-          for (var result in results) {
-            String advName = result.device.advName;
-            String platformName = result.device.platformName;
-
-            // 디바이스의 advName이나 platformName 중 하나라도 주어진 productName과 일치하는지 확인
-            if (advName == productName) {
-              debugLog('Found matching device by advName: $advName');
-              if (!completer.isCompleted) {
-                completer.complete(result.device); // BluetoothDevice 반환
-              }
-              break;
-            } else if (platformName == productName) {
-              debugLog('Found matching device by platformName: $platformName');
-              if (!completer.isCompleted) {
-                completer.complete(result.device); // BluetoothDevice 반환
-              }
-              break;
-            }
-          }
-        });
-
-    // 지정된 시간 동안 디바이스를 찾지 못하면 null 반환
-    Future.delayed(Duration(milliseconds: durationMilliSec)).then((_) {
-      if (!completer.isCompleted) {
-        debugLog(
-            'Timeout: No device matched the specified name within the given time.');
-        completer.complete(null);
-      }
-    });
-
-    // 스캔 완료 후 구독 해제 및 스캔 중지
-    completer.future.then((_) async {
-      await scanSubscription?.cancel();
-      FlutterBluePlus.stopScan();
-      debugLog('Scan stopped and subscription cancelled.');
-    });
-
-    return completer.future;
-  }
-
-
-  static Future<void> connectToDeviceThenListen(BluetoothDevice? bluetoothDevice) async {
+  static Future<void> connectToDevice(BluetoothDevice? bluetoothDevice) async {
     if (bluetoothDevice == null) {
       debugLog("connectToDevice :: device is null");
       return;
     }
-
     try {
-      // 기존의 구독을 해지하여 중복 리스너가 발생하지 않도록 처리
-      // 연결 상태 리스너 추가 및 구독 관리
-      if(connectionSubscription != null){
-        debugLog("이미 리스너 존재");
-        connectionSubscription = bluetoothDevice.connectionState.listen((BluetoothConnectionState state) async {
-          switch (state) {
-            case BluetoothConnectionState.connected:
-              debugLog('블루투스 연결 리스너 : Device connected: ${bluetoothDevice.platformName}');
-              await bluetoothDevice.requestMtu(500); // MTU 요청
-              break;
-            case BluetoothConnectionState.disconnected:
-              debugLog('블루투스 연결 리스너 : Device disconnected: ${bluetoothDevice.platformName}');
-              // 연결 해제 시 리스너 해지
-              await bluetoothDevice.disconnect();
-              await _cancelConnectionSubscription();
-              break;
-            default:
-              debugLog('블루투스 연결 리스너 : Unknown connection state: $state');
-          }
-        });
-      }
-
-      debugLog("Connected to device: ${bluetoothDevice.platformName}");
+      await bluetoothDevice.connect();
+      debugLog("Connected to device: ${bluetoothDevice.name}");
     } catch (e) {
       debugLog('Failed to connect to BLE device: $e');
     }
   }
-
-// 리스너 해제 함수
-  static Future<void> _cancelConnectionSubscription() async {
-    if (connectionSubscription != null) {
-      await connectionSubscription!.cancel();
-      connectionSubscription = null;
-      debugLog('블루투스 연결 리스너 해제 완료');
+  // 알림 리스너 해제 함수
+  Future<void> unregisterNotification() async {
+    try {
+      await notificationSubscription?.cancel();
+      notificationSubscription = null;
+      debugLog('알림 리스너 해제됨');
+    } catch (e) {
+      debugLog('알림 해제 실패: $e');
     }
+  }
+
+  void stopScan() {
+    FlutterBluePlus.stopScan();
+    debugLog('스캔 중지됨.');
   }
 }
