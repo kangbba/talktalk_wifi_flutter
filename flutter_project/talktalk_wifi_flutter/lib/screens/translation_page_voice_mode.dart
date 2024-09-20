@@ -221,9 +221,10 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     );
   }
 
-  Future<String> showVoicePopUp(ActingOwner btnOwner, BluetoothDevice? targetBleDevice) async {
+  Future<String> showVoicePopUp(ActingOwner btnOwner, Function onCanceledAction) async {
     isVoicePopUpOn = true;
     LanguageItem fromLangItem = btnOwner == ActingOwner.me ? languageControl.nowMyLanguageItem : languageControl.nowYourLanguageItem;
+
     String speechStr = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -234,24 +235,27 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
           child: SizedBox(
             height: 500,
             child: SpeechRecognitionPopUp(
-              icon: btnOwner == ActingOwner.me ? Icons.mic : Icons.pause,
-              iconColor: Colors.white,
-              backgroundColor: btnOwner == ActingOwner.me ? myBackgroundColor : yourBackgroundColor,
-              langItem: fromLangItem, fontSize: 26,
-              titleText: btnOwner == ActingOwner.me ? "Please speak now" : "Listening ...",
-              onCompleted: () => onExitFromActingRoutine,
-              onCanceled: () async {
-                onExitFromActingRoutine();
-                BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, "/mainScreenOn");
-              }
+                icon: btnOwner == ActingOwner.me ? Icons.mic : Icons.pause,
+                iconColor: Colors.white,
+                backgroundColor: btnOwner == ActingOwner.me ? myBackgroundColor : yourBackgroundColor,
+                langItem: fromLangItem,
+                fontSize: 26,
+                titleText: btnOwner == ActingOwner.me ? "Please speak now" : "Listening ...",
+                onCompleted: () => onExitFromActingRoutine(),
+                onCanceled: () async {
+                  onExitFromActingRoutine();
+                  await onCanceledAction(); // Invoke the passed cancel action
+                }
             ),
           ),
         );
       },
     ) ?? '';
+
     isVoicePopUpOn = false;
     return speechStr;
   }
+
 
 
   Future<bool> allConditionCheck() async {
@@ -313,31 +317,9 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     //Finding valid ble device by HFP device name
     String targetDeviceName = allConnectedAudioDevices[0].name;
-    //이미 연결된 BleDevice 검사
-    BluetoothDevice? targetBleDevice = await BluetoothDeviceService.scanPreConnectedBleDevice(targetDeviceName);
-    if (targetBleDevice == null) {
-      loadingDialog(context, "Searching for nearby devices");
-      //이미 연결된 BleDevice 없는 경우 주변 기기 검색
-      ScanResult? scanResult = await BluetoothDeviceService.scanNearBleDevicesByProductName(targetDeviceName, 5);
-      Navigator.of(context).pop();
-      if (scanResult == null) {
-        await simpleConfirmDialogA(context, "No devices found nearby", "OK");
-        onExitFromActingRoutine();
-        return;
-      }
-      else{
-        targetBleDevice = scanResult.device;
-      }
-    }
+    String targetDeviceRemoteID = allConnectedAudioDevices[0].address;
 
-    //BLE 디바이스 연결
-    loadingDialog(context, "Connecting to $targetDeviceName");
-    await BluetoothDeviceService.connectToDevice(targetBleDevice);
-
-    if(mounted){
-      Navigator.of(context).pop();
-    }
-    await Future.delayed(const Duration(milliseconds: 500));
+    BluetoothDeviceService.startScanAndConnect(targetDeviceRemoteID);
 
     //말하기를 위한 라우팅 제어
     if (isMine) {
@@ -347,14 +329,16 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     else {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
       debugLog("블루투스 연결이 되어있지 않아서 재연결 후 write 하겠음");
-      await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, "/micScreenOn");
+      await BluetoothDeviceService.writeMsgToCurrentBleDevice("/micScreenOn");
     }
     await Future.delayed(const Duration(milliseconds: 300));
 
     //음성인식 시작
     textToSpeechControl.changeLanguage(isMine ? languageControl.nowYourLanguageItem.speechLocaleId : languageControl.nowMyLanguageItem.speechLocaleId);
-    String speechStr = await showVoicePopUp(btnOwner, targetBleDevice);
-
+    String speechStr = await showVoicePopUp(
+        btnOwner,
+            () => BluetoothDeviceService.writeMsgToCurrentBleDevice("/mainScreenOn")
+    );
     //음성인식 완료 처리
     if (speechStr.isEmpty) {
       onExitFromActingRoutine();
@@ -396,7 +380,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
     String truncatedStr = utf8.decode(truncatedBytes);
     String fullMsgToSend = "${targetLanguageItem.uniqueId}:$truncatedStr;";
-    await BluetoothDeviceService.writeMsgToBleDevice(targetBleDevice, fullMsgToSend);
+    await BluetoothDeviceService.writeMsgToCurrentBleDevice(fullMsgToSend);
     await Future.delayed(const Duration(milliseconds: 100));
 
     //perform text to speech
@@ -405,6 +389,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
     await Future.delayed(const Duration(milliseconds: 1000));
     onExitFromActingRoutine();
+
     // 자동 전환 기능 추가
     if(autoSwitchSpeaker){
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -435,6 +420,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
   }
   void onExitFromActingRoutine() async {
     nowActingOwner = ActingOwner.nobody;
+    BluetoothDeviceService.stopScan();
     AudioDeviceService.setAudioRouteMobile();
   }
 
