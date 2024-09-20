@@ -328,10 +328,9 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     else {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
-      debugLog("블루투스 연결이 되어있지 않아서 재연결 후 write 하겠음");
-      await BluetoothDeviceService.writeMsgToCurrentBleDevice("/micScreenOn");
     }
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 500));
+    await BluetoothDeviceService.writeMsgToCurrentBleDevice("/micScreenOn");
 
     //음성인식 시작
     textToSpeechControl.changeLanguage(isMine ? languageControl.nowYourLanguageItem.speechLocaleId : languageControl.nowMyLanguageItem.speechLocaleId);
@@ -368,26 +367,27 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     await Future.delayed(const Duration(milliseconds: 500));
 
     //BLE 디바이스로 전송
-    String translatedStr = languageControl.yourStr.trim();
-    List<int> msgBytes = utf8.encode(translatedStr);
-    debugLog("*MSG DATA LENGTH : ${msgBytes.length}");
-    List<int> truncatedBytes;
-    if (msgBytes.length > 500) {
-      truncatedBytes = msgBytes.sublist(0, 500);
-    } else {
-      truncatedBytes = msgBytes;
-    }
     LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
-    String truncatedStr = utf8.decode(truncatedBytes);
-    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$truncatedStr;";
+    String translatedStr = languageControl.yourStr.trim();
+    // List<int> msgBytes = utf8.encode(translatedStr);
+    // debugLog("*MSG DATA LENGTH : ${msgBytes.length}");
+    // List<int> truncatedBytes;
+    // if (msgBytes.length > 500) {
+    //   truncatedBytes = msgBytes.sublist(0, 500);
+    // } else {
+    //   truncatedBytes = msgBytes;
+    // }
+    // String truncatedStr = utf8.decode(truncatedBytes);
+    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
     await BluetoothDeviceService.writeMsgToCurrentBleDevice(fullMsgToSend);
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     //perform text to speech
     String strToSpeech = isMine ? languageControl.yourStr : languageControl.myStr;
     LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
     await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
-    await Future.delayed(const Duration(milliseconds: 1000));
+    await Future.delayed(const Duration(milliseconds: 500));
+
     onExitFromActingRoutine();
 
     // 자동 전환 기능 추가
