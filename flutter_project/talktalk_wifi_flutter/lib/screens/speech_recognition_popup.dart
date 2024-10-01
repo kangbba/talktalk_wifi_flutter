@@ -127,7 +127,7 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
     _lastText = _textController.text;
 
     // Start a timer that triggers after 1.5 seconds if the text hasn't changed
-    _textChangeTimer = Timer(const Duration(milliseconds: 1500), () {
+    _textChangeTimer = Timer(const Duration(milliseconds: 3000), () {
       if (_textController.text == _lastText && _textController.text.isNotEmpty) {
         _completePopUp();
       }

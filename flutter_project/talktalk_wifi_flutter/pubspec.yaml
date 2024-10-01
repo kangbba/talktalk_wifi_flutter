@@ -41,7 +41,7 @@ dependencies:
   connectivity_plus: ^6.0.5
 
   # App
-  flutter_blue_plus: ^1.32.12
+  flutter_blue_plus: ^1.31.14
   google_cloud_translation: ^0.0.3
 #  flutter_speech: ^2.0.0
   speech_to_text: ^7.0.0

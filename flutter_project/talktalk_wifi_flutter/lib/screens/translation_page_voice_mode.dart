@@ -26,11 +26,12 @@ import '../widgets/recording_btn.dart';
 import '../widgets/translation_area.dart';
 import 'audio_test.dart';
 
-enum ActingOwner{
+enum ActingOwner {
   nobody,
   me,
   you,
 }
+
 class TranslatePageVoiceMode extends StatefulWidget {
   const TranslatePageVoiceMode({super.key});
 
@@ -38,17 +39,14 @@ class TranslatePageVoiceMode extends StatefulWidget {
   State<TranslatePageVoiceMode> createState() => _TranslatePageVoiceModeState();
 }
 
-
 ActingOwner nowActingOwner = ActingOwner.nobody;
 bool isTesting = false;
 DataControl dataControl = DataControl.getInstance();
 
 const double micHeight = 30;
 
-
-class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
-
-
+class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
+    with WidgetsBindingObserver {
   DataControl dataControl = DataControl.getInstance();
   LanguageControl languageControl = LanguageControl.getInstance();
   TextToSpeechControl textToSpeechControl = TextToSpeechControl.getInstance();
@@ -58,10 +56,10 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
   int voiceTranslatingCounter = 0;
   bool isVoicePopUpOn = false;
 
-
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // Observer 등록
     dataControl.initPrefs();
     debugLog("DataControl 설정 로드 완료");
 
@@ -71,13 +69,23 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     languageControl.initLanguageControl('ko');
     textToSpeechControl.initTextToSpeech();
     debugLog("언어 설정 로드 및 언어 관리 초기화 완료");
+  }
 
-
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      debugLog("사용자가 pause를 호출");
+    }
+    else if (state == AppLifecycleState.resumed) {
+      debugLog("사용자가 resumed 호출");
+    }
   }
 
   @override
   void dispose() {
-    nowActingOwner = ActingOwner.nobody;
+    onExitFromActingRoutine();
+    // Call the superclass dispose method
+    WidgetsBinding.instance.removeObserver(this); // Observer 해제
     super.dispose();
   }
 
@@ -88,35 +96,45 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
         builder: (context, languageControl, child) {
           return Column(
             children: [
-              Container(
-                height: 70,
-                color : Colors.black12
-              ),
+              Container(height: 70, color: Colors.black12),
               Expanded(
                 child: TranslationArea(
-                  textColor: (languageControl.myStr.isEmpty ? Colors.black45 : myBackgroundColor),
+                  textColor: (languageControl.myStr.isEmpty
+                      ? Colors.black45
+                      : myBackgroundColor),
                   backgroundColor: Colors.white54,
-                  str: (languageControl.myStr.isEmpty ? 'Tap the recording button' : languageControl.myStr),
+                  str: (languageControl.myStr.isEmpty
+                      ? 'Tap the recording button'
+                      : languageControl.myStr),
                   isMine: true,
                 ),
               ),
-              Container(height: 0.6, color: Colors.grey,),
+              Container(
+                height: 0.6,
+                color: Colors.grey,
+              ),
               Expanded(
                 child: TranslationArea(
-                  textColor: (languageControl.myStr.isEmpty ? Colors.black45 : Colors.black87),
+                  textColor: (languageControl.myStr.isEmpty
+                      ? Colors.black45
+                      : Colors.black87),
                   backgroundColor: Colors.white54,
                   str: languageControl.yourStr,
                   isMine: false,
                 ),
               ),
-              Container(height: 0.6, color: Colors.grey,),
+              Container(
+                height: 0.6,
+                color: Colors.grey,
+              ),
               SizedBox(
                 height: 200,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: languageMenuAndRecordingBtn(context, languageControl, false),
+                      child: languageMenuAndRecordingBtn(
+                          context, languageControl, false),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 32.0),
@@ -135,13 +153,15 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
                       ),
                     ),
                     Expanded(
-                      child: languageMenuAndRecordingBtn(context, languageControl, true),
+                      child: languageMenuAndRecordingBtn(
+                          context, languageControl, true),
                     ),
                   ],
                 ),
               ),
-              if(isRoutingTest)
-                AudioTest().buildAudioControlRow(context, textToSpeechControl, languageControl),
+              if (isRoutingTest)
+                AudioTest().buildAudioControlRow(
+                    context, textToSpeechControl, languageControl),
             ],
           );
         },
@@ -154,7 +174,9 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
     return androidInfo.version.sdkInt;
   }
-  Widget languageMenuAndRecordingBtn(BuildContext context, LanguageControl languageControl, bool isMine) {
+
+  Widget languageMenuAndRecordingBtn(
+      BuildContext context, LanguageControl languageControl, bool isMine) {
     return Column(
       children: [
         LanguageMenuSelector(
@@ -175,10 +197,10 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
             backgroundColor: isMine ? myBackgroundColor : yourBackgroundColor,
             btnColor: Colors.white,
             onPressed: () async {
-              try{
-                onPressedRecordingBtn(languageControl, isMine ? ActingOwner.me : ActingOwner.you);
-              }
-              catch(e){
+              try {
+                onPressedRecordingBtn(
+                    languageControl, isMine ? ActingOwner.me : ActingOwner.you);
+              } catch (e) {
                 debugLog(e);
               }
             },
@@ -205,9 +227,16 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Icon(Icons.check_circle_outline_outlined, color: Colors.lightGreen,),
+                      const Icon(
+                        Icons.check_circle_outline_outlined,
+                        color: Colors.lightGreen,
+                      ),
                       const SizedBox(width: 2),
-                      Text(devices[index].name, style: TextStyle(color: Colors.indigo[50], fontSize: 14),),
+                      Text(
+                        devices[index].name,
+                        style:
+                            TextStyle(color: Colors.indigo[50], fontSize: 14),
+                      ),
                     ],
                   ),
                 );
@@ -221,52 +250,64 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     );
   }
 
-  Future<String> showVoicePopUp(ActingOwner btnOwner, Function onCanceledAction) async {
+  Future<String> showVoicePopUp(
+      ActingOwner btnOwner, Function onCanceledAction) async {
     isVoicePopUpOn = true;
-    LanguageItem fromLangItem = btnOwner == ActingOwner.me ? languageControl.nowMyLanguageItem : languageControl.nowYourLanguageItem;
+    LanguageItem fromLangItem = btnOwner == ActingOwner.me
+        ? languageControl.nowMyLanguageItem
+        : languageControl.nowYourLanguageItem;
 
     String speechStr = await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20.0),
-          ),
-          child: SizedBox(
-            height: 500,
-            child: SpeechRecognitionPopUp(
-                icon: btnOwner == ActingOwner.me ? Icons.mic : Icons.pause,
-                iconColor: Colors.white,
-                backgroundColor: btnOwner == ActingOwner.me ? myBackgroundColor : yourBackgroundColor,
-                langItem: fromLangItem,
-                fontSize: 26,
-                titleText: btnOwner == ActingOwner.me ? "Please speak now" : "Listening ...",
-                onCompleted: () => onExitFromActingRoutine(),
-                onCanceled: () async {
-                  onExitFromActingRoutine();
-                  await onCanceledAction(); // Invoke the passed cancel action
-                }
-            ),
-          ),
-        );
-      },
-    ) ?? '';
+          context: context,
+          builder: (BuildContext context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20.0),
+              ),
+              child: SizedBox(
+                height: 500,
+                child: SpeechRecognitionPopUp(
+                    icon: btnOwner == ActingOwner.me ? Icons.mic : Icons.pause,
+                    iconColor: Colors.white,
+                    backgroundColor: btnOwner == ActingOwner.me
+                        ? myBackgroundColor
+                        : yourBackgroundColor,
+                    langItem: fromLangItem,
+                    fontSize: 26,
+                    titleText: btnOwner == ActingOwner.me
+                        ? "Please speak now"
+                        : "Listening ...",
+                    onCompleted: () => onExitFromActingRoutine(),
+                    onCanceled: () async {
+                      onExitFromActingRoutine();
+                      await onCanceledAction(); // Invoke the passed cancel action
+                    }),
+              ),
+            );
+          },
+        ) ??
+        '';
 
     isVoicePopUpOn = false;
     return speechStr;
   }
 
-
-
   Future<bool> allConditionCheck() async {
-    bool permissionsReady = await PermissionControl.checkAndRequestPermissions();
+    bool permissionsReady =
+        await PermissionControl.checkAndRequestPermissions();
     if (!permissionsReady) {
       onExitFromActingRoutine();
       if (mounted) {
-        bool? resp = await askDialogColumn(context,
-            const Text("Would you like to go to settings to allow permission?"
-                "\n\n(Permission -> Mic, Bluetooth Permission)",
-              style: TextStyle(fontSize: 16),), "OK", "CANCEL", 100);
+        bool? resp = await askDialogColumn(
+            context,
+            const Text(
+              "Would you like to go to settings to allow permission?"
+              "\n\n(Permission -> Mic, Bluetooth Permission)",
+              style: TextStyle(fontSize: 16),
+            ),
+            "OK",
+            "CANCEL",
+            100);
         if (resp == true) {
           //세팅창 이동시켜줌
           openAppSettings();
@@ -275,7 +316,8 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
       return false;
     }
 
-    List<ConnectivityResult> result = await (Connectivity().checkConnectivity());
+    List<ConnectivityResult> result =
+        await (Connectivity().checkConnectivity());
 
     if (result.first == ConnectivityResult.none) {
       // 네트워크 연결이 없는 경우 처리
@@ -286,7 +328,38 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     return true;
   }
-  onPressedRecordingBtn(LanguageControl languageControl, ActingOwner btnOwner) async {
+
+  Future<AudioDevice?> findProperAudioDevice() async {
+    List<AudioDevice> allConnectedAudioDevices =
+        await AudioDeviceService.getConnectedAudioDevicesByPrefixAndType(
+            PRODUCT_PREFIX, 7);
+    if (allConnectedAudioDevices.isEmpty) {
+      if (mounted) {
+        bool? resp = await askDialogColumn(
+            context,
+            const Text(
+              "Check Your Bluetooth Device",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.normal),
+            ),
+            "Go To Setting",
+            "CANCEL",
+            100);
+        if (resp == true) {
+          //세팅창 이동시켜줌
+          navigateToBluetoothSettings();
+        }
+      }
+      return null;
+    } else if (allConnectedAudioDevices.length >= 2) {
+      await simpleConfirmDialogA(context,
+          "Multiple devices found, Please connect one device only", "OK");
+      return null;
+    }
+    return allConnectedAudioDevices[0];
+  }
+
+  onPressedRecordingBtn(
+      LanguageControl languageControl, ActingOwner btnOwner) async {
     //Presetting
     textToSpeechControl.stop();
     nowActingOwner = btnOwner;
@@ -296,48 +369,34 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
       onExitFromActingRoutine();
       return;
     }
-    List<AudioDevice> allConnectedAudioDevices = await AudioDeviceService.getConnectedAudioDevicesByPrefixAndType(PRODUCT_PREFIX, 7);
-    if (allConnectedAudioDevices.isEmpty) {
+
+    AudioDevice? properAudioDevice = await findProperAudioDevice();
+    if (properAudioDevice == null) {
       onExitFromActingRoutine();
-      if (mounted) {
-        bool? resp = await askDialogColumn(context,
-            const Text("Check Your Bluetooth Device",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.normal),), "Go To Setting", "CANCEL", 100);
-        if (resp == true) {
-          //세팅창 이동시켜줌
-          navigateToBluetoothSettings();
-        }
-      }
-      return;
-    }
-    else if (allConnectedAudioDevices.length >= 2) {
-      onExitFromActingRoutine();
-      await simpleConfirmDialogA(context, "Multiple devices found, Please connect one device only", "OK");
       return;
     }
     //Finding valid ble device by HFP device name
-    String targetDeviceName = allConnectedAudioDevices[0].name;
-    String targetDeviceRemoteID = allConnectedAudioDevices[0].address;
-
-    BluetoothDeviceService.startScanAndConnect(targetDeviceRemoteID);
+    String targetDeviceName = properAudioDevice.name;
+    String targetDeviceRemoteID = properAudioDevice.address;
 
     //말하기를 위한 라우팅 제어
     if (isMine) {
       debugLog("내 라우팅");
       AudioDeviceService.setAudioRouteMobile();
-    }
-    else {
+    } else {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
     }
-    await Future.delayed(const Duration(milliseconds: 500));
-    await BluetoothDeviceService.writeMsgToCurrentBleDevice("/micScreenOn");
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/micScreenOn");
 
     //음성인식 시작
-    textToSpeechControl.changeLanguage(isMine ? languageControl.nowYourLanguageItem.speechLocaleId : languageControl.nowMyLanguageItem.speechLocaleId);
+    textToSpeechControl.changeLanguage(isMine
+        ? languageControl.nowYourLanguageItem.speechLocaleId
+        : languageControl.nowMyLanguageItem.speechLocaleId);
     String speechStr = await showVoicePopUp(
-        btnOwner,
-            () => BluetoothDeviceService.writeMsgToCurrentBleDevice("/mainScreenOn")
-    );
+          btnOwner,
+          () => onExitFromActingRoutine());
     //음성인식 완료 처리
     if (speechStr.isEmpty) {
       onExitFromActingRoutine();
@@ -359,55 +418,60 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     setState(() {});
 
 
+    //BLE 디바이스로 전송
+    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
+    String translatedStr = languageControl.yourStr.trim();
+    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
+    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, fullMsgToSend);
+    await Future.delayed(const Duration(milliseconds: 700));
+
     if (isMine) {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
     } else {
       AudioDeviceService.setAudioRouteMobile();
     }
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    //BLE 디바이스로 전송
-    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
-    String translatedStr = languageControl.yourStr.trim();
-    // List<int> msgBytes = utf8.encode(translatedStr);
-    // debugLog("*MSG DATA LENGTH : ${msgBytes.length}");
-    // List<int> truncatedBytes;
-    // if (msgBytes.length > 500) {
-    //   truncatedBytes = msgBytes.sublist(0, 500);
-    // } else {
-    //   truncatedBytes = msgBytes;
-    // }
-    // String truncatedStr = utf8.decode(truncatedBytes);
-    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
-    await BluetoothDeviceService.writeMsgToCurrentBleDevice(fullMsgToSend);
-    await Future.delayed(const Duration(milliseconds: 500));
-
+    await Future.delayed(const Duration(milliseconds: 1500));
     //perform text to speech
-    String strToSpeech = isMine ? languageControl.yourStr : languageControl.myStr;
-    LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
-    await textToSpeechControl.speakWithLanguage(strToSpeech.trim(), toLangItem.speechLocaleId);
+    String strToSpeech =
+        isMine ? languageControl.yourStr : languageControl.myStr;
+    LanguageItem toLangItem = isMine
+        ? languageControl.nowYourLanguageItem
+        : languageControl.nowMyLanguageItem;
+    await textToSpeechControl.speakWithLanguage(
+        strToSpeech.trim(), toLangItem.speechLocaleId);
     await Future.delayed(const Duration(milliseconds: 500));
 
     onExitFromActingRoutine();
 
     // 자동 전환 기능 추가
-    if(autoSwitchSpeaker){
+    if (autoSwitchSpeaker) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
-          onPressedRecordingBtn(languageControl, btnOwner == ActingOwner.me ? ActingOwner.you : ActingOwner.me);
+          onPressedRecordingBtn(languageControl,
+              btnOwner == ActingOwner.me ? ActingOwner.you : ActingOwner.me);
         }
       });
     }
   }
-  Future<bool> translateWithNowStatus(bool isMine) async {
-    String strToTranslate = isMine ? languageControl.myStr : languageControl.yourStr;
-    LanguageItem fromLangItem = isMine ? languageControl.nowMyLanguageItem : languageControl.nowYourLanguageItem;
-    LanguageItem toLangItem = isMine ? languageControl.nowYourLanguageItem : languageControl.nowMyLanguageItem;
 
-    String translatedStr = await translateControl.translateByAvailablePlatform(strToTranslate, fromLangItem, toLangItem, 4000);
+  Future<bool> translateWithNowStatus(bool isMine) async {
+    String strToTranslate =
+        isMine ? languageControl.myStr : languageControl.yourStr;
+    LanguageItem fromLangItem = isMine
+        ? languageControl.nowMyLanguageItem
+        : languageControl.nowYourLanguageItem;
+    LanguageItem toLangItem = isMine
+        ? languageControl.nowYourLanguageItem
+        : languageControl.nowMyLanguageItem;
+
+    String translatedStr = await translateControl.translateByAvailablePlatform(
+        strToTranslate, fromLangItem, toLangItem, 4000);
     if (translatedStr.isEmpty) {
       if (mounted) {
-        simpleConfirmDialogA(context, 'The translation server is temporarily unstable. Please retry.', 'OK');
+        simpleConfirmDialogA(
+            context,
+            'The translation server is temporarily unstable. Please retry.',
+            'OK');
       }
       return false;
     }
@@ -418,6 +482,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
     }
     return true;
   }
+
   void onExitFromActingRoutine() async {
     nowActingOwner = ActingOwner.nobody;
     BluetoothDeviceService.stopScan();
@@ -450,5 +515,4 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode> {
   //     onPressedRecordingBtn(languageControl, ActingOwner.you);
   //   } );
   // }
-
 }
