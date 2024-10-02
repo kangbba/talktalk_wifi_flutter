@@ -121,10 +121,11 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
   @override
   void dispose() async{
     onExitFromActingRoutine();
-    audioDeviceCheckTimerExit = true;
     BluetoothDeviceService.dispose();
+    audioDeviceCheckTimerExit = true;
     requireRestoringConnection = true;
     WidgetsBinding.instance.removeObserver(this); // Observer 해제
+    AudioDeviceService.setAudioRouteMobile();
     super.dispose();
   }
 
