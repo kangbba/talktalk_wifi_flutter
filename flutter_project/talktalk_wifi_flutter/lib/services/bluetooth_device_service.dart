@@ -6,6 +6,7 @@ import '../secrets/secret_device_keys.dart';
 import '../utils/utils.dart';
 
 class BluetoothDeviceService {
+  static StreamSubscription<BluetoothConnectionState>? _connectionStateSubscription;
   static StreamSubscription<List<ScanResult>>? scanSubscription;
   static bool _isScanning = false;
   static List<BluetoothDevice> scannedDevices = []; // 스캔된 장치 리스트를 저장하는 전역 변수
@@ -111,14 +112,69 @@ class BluetoothDeviceService {
 
   // 장치 연결 메소드
   static Future<void> connectToDevice(BluetoothDevice device, int durationMilliSec) async {
-    debugLog('${device.advName}에 연결 시도 중...');
     try {
-      await device.connect(mtu : null, autoConnect : true, timeout: Duration(milliseconds: durationMilliSec));
-      debugLog('${device.advName}에 성공적으로 연결됨');
+      debugLog('${device.advName} ${device.remoteId}에 연결 시도 중...');
+
+      await device.connect(mtu: null, autoConnect: true, timeout: Duration(milliseconds: durationMilliSec));
+      debugLog('Remote ID ${device.remoteId}의 장치에 성공적으로 연결됨');
+
       // 연결 성공 시 remoteId 저장
       await saveRemoteId(device.remoteId.toString());
+      await device.requestMtu(512);
+
+      // 연결 상태 스트림 구독
+      _connectionStateSubscription = device.connectionState.listen((connectionState) {
+        if (connectionState == BluetoothConnectionState.connected) {
+          debugLog('장치 ${device.remoteId}가 연결된 상태입니다.');
+        } else if (connectionState == BluetoothConnectionState.disconnected) {
+          debugLog('장치 ${device.remoteId}의 연결이 해제되었습니다.');
+          _cancelConnectionStateSubscription();
+        }
+      }, onError: (error) {
+        debugLog('장치 ${device.remoteId}의 연결 상태 모니터링 중 오류 발생: $error');
+        _cancelConnectionStateSubscription();
+      });
+
     } catch (e) {
-      debugLog('연결 실패: $e');
+      debugLog('Remote ID ${device.remoteId}의 장치 연결 실패: $e');
+    }
+  }
+
+  // 연결 상태 구독 취소
+  static void _cancelConnectionStateSubscription() {
+    if (_connectionStateSubscription != null) {
+      _connectionStateSubscription!.cancel();
+      _connectionStateSubscription = null;
+      debugLog('연결 상태 구독 취소');
+    }
+  }
+
+  // 장치 연결 해제 메소드
+  static Future<void> disconnectCurrentDevice(BluetoothDevice bleDevice) async {
+    debugLog('${bleDevice.advName} 연결 해제 시도 중...');
+    try {
+      await bleDevice.disconnect();
+      debugLog('${bleDevice.advName} 연결 해제 성공');
+      _cancelConnectionStateSubscription(); // 연결 상태 구독 취소
+    } catch (e) {
+      debugLog('연결 해제 실패: $e');
+    }
+  }
+
+  // Dispose 시 호출될 함수
+  static Future<void> dispose() async {
+    debugLog('BluetoothDeviceService dispose 호출됨');
+    // 스캔 중지 및 스캔 구독 취소
+    if (_isScanning) {
+      await stopScan(); // stopScan 메소드로 스캔 중지
+      debugLog('스캔 중지 완료');
+    }
+
+    // 연결 상태 구독 취소
+    if (_connectionStateSubscription != null) {
+      await _connectionStateSubscription!.cancel();
+      _connectionStateSubscription = null;
+      debugLog('연결 상태 구독 취소 완료');
     }
   }
   // Remote ID로 직접 장치에 연결하는 메서드
@@ -126,30 +182,12 @@ class BluetoothDeviceService {
     try {
       // Remote ID를 사용하여 BluetoothDevice 객체 생성
       BluetoothDevice device = BluetoothDevice.fromId(remoteId);
-      debugLog('Remote ID $remoteId의 장치에 연결 시도 중...');
-
-      // 장치에 연결 시도
-      await device.connect(mtu : null, autoConnect : true, timeout: Duration(milliseconds: durationMilliSec));
-      debugLog('Remote ID $remoteId의 장치에 성공적으로 연결됨');
-      // 연결 성공 시 remoteId 저장
-      await saveRemoteId(remoteId);
-      await device.requestMtu(512);
+      await connectToDevice(device, durationMilliSec);
     } catch (e) {
       debugLog('Remote ID $remoteId의 장치 연결 실패: $e');
     }
   }
 
-
-  // 장치 연결 해제 메소드
-  static Future<void> disconnectCurrentDevice(BluetoothDevice bleDevice) async {
-    debugLog('${bleDevice.advName} 연결해제 시도 중...');
-    try {
-      await bleDevice.disconnect();
-      debugLog('${bleDevice.advName} 연결 해제 성공');
-    } catch (e) {
-      debugLog('연결 해제 실패: $e');
-    }
-  }
 
   static BluetoothDevice getBleDevice(String remoteID){
     BluetoothDevice device = BluetoothDevice.fromId(remoteID);
@@ -158,41 +196,29 @@ class BluetoothDeviceService {
 
 
   // Write a message to the connected device
-  static Future<void> writeMsgToCurrentBleDevice(String targetDeviceRemoteID, String msg) async {
+  static Future<bool> writeMsgToCurrentBleDevice(String targetDeviceRemoteID, String msg) async {
 
-
-    BluetoothDevice? bleDevice;
-    // debugLog("우선 Bonded 검사");
-    // bleDevice = await BluetoothDeviceService.getBondedDevice();
-    // if (bleDevice == null) {
-    //   debugLog("우선 Bonded 없었다");
-    //   bleDevice = await BluetoothDeviceService.startScan(targetDeviceRemoteID);
-    // }
-    // else{
-    //   debugLog("우선 Bonded 있었다 ${bleDevice.remoteId}");
-    // }
-    bleDevice = await BluetoothDeviceService.getBondedDevice();
-    if(bleDevice != null){
-      debugLog("BONDED DEVICE EXIST : ${bleDevice.remoteId} ${bleDevice.advName} ${bleDevice.platformName}");
-      await connectToDeviceById(targetDeviceRemoteID, 2000);
-    }
+    BluetoothDevice? bleDevice = await BluetoothDeviceService.getBondedDevice();
 
     if(bleDevice == null){
+      debugLog("BONDED DEVICE Does not EXIST, start scanning");
       bleDevice = await BluetoothDeviceService.startScan(targetDeviceRemoteID, 2);
-      if(bleDevice == null){
-        debugLog('장치가 없습니다.');
-        return;
-      }
-      await connectToDeviceById(targetDeviceRemoteID, 2000);
     }
+    else{
+      debugLog("BONDED DEVICE EXIST : ${bleDevice.remoteId} ${bleDevice.advName} ${bleDevice.platformName}");
+    }
+    if(bleDevice == null){
+      debugLog('장치가 없습니다.');
+      return false;
+    }
+    await connectToDevice(bleDevice, 2000);
     BluetoothConnectionState connectionState = await bleDevice.connectionState.first;
     if (connectionState != BluetoothConnectionState.connected) {
-      debugLog('장치가 연결되지 않았습니다. 현재 상태: $connectionState');
-      return;
+      debugLog('장치에 연결을 시도했지만 연결되지 않았습니다. 현재 상태: $connectionState');
+      return false;
     }
 
-    debugLog('장치가 연결된 상태. 메시지 전송을 시도합니다.');
-    debugLog('${bleDevice.advName}, ${bleDevice.remoteId}로 메시지 전송 시도 중');
+    debugLog('장치가 연결된 상태. 메시지 전송을 시도합니다. ${bleDevice.advName}, ${bleDevice.remoteId}로 메시지 전송 시도 중');
     try {
       List<BluetoothService> services = await bleDevice.discoverServices();
       debugLog('발견된 서비스: ${services.length}');
@@ -209,8 +235,10 @@ class BluetoothDeviceService {
 
       await targetCharacteristic.write(utf8.encode(msg), withoutResponse: false);
       debugLog('${bleDevice.advName}, ${bleDevice.remoteId}로 메시지 ${msg} 전송 성공');
+      return true;
     } catch (e) {
       debugLog('메시지 전송 실패: $e');
+      return false;
     }
   }
 }

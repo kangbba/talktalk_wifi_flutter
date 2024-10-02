@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -55,11 +56,15 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
   final bool isRoutingTest = false;
   int voiceTranslatingCounter = 0;
   bool isVoicePopUpOn = false;
+  late bool requireRestoringConnection;
+  bool audioDeviceCheckTimerExit = false;
+  bool isMicRoutinePlaying = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this); // Observer 등록
+    _startAudioDeviceCheckTimer();
     dataControl.initPrefs();
     debugLog("DataControl 설정 로드 완료");
 
@@ -69,6 +74,38 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     languageControl.initLanguageControl('ko');
     textToSpeechControl.initTextToSpeech();
     debugLog("언어 설정 로드 및 언어 관리 초기화 완료");
+    // 타이머 시작
+  }
+// 타이머 시작 함수
+  void _startAudioDeviceCheckTimer() async{
+    audioDeviceCheckTimerExit = false;
+    requireRestoringConnection = true;
+    bool isLoadingPopedUp = false;
+    while (!audioDeviceCheckTimerExit){
+      // 여기에서 주기적으로 실행할 작업을 수행 대기 (1초)
+      if(!requireRestoringConnection){
+        debugLog("requireRestoringConnection 이 필요없는 상태이므로 대기중");
+        await Future.delayed(Duration(seconds: 1));
+        continue;
+      }
+      if(isMicRoutinePlaying){
+        debugLog("isMicRoutinePlaying 이므로 대기중");
+        await Future.delayed(Duration(seconds: 1));
+        continue;
+      }
+      //List<AudioDevice> allConnectedAudioDevices = await AudioDeviceService.getConnectedAudioDevicesByPrefixAndType(PRODUCT_PREFIX, 7);
+      String? savedRemoteID = await BluetoothDeviceService.getSavedRemoteId();
+      if(savedRemoteID == null) {
+        debugLog("savedRemoteID 이 없으므로 대기중");
+        await Future.delayed(Duration(seconds: 1));
+        continue;
+      }
+
+      bool success = await BluetoothDeviceService.writeMsgToCurrentBleDevice(savedRemoteID, "/connectedScreenOn");
+      debugLog("장치가 연결되었으며, 메시지를 보냈습니다. success : ${success}");
+      requireRestoringConnection = !success;
+      await Future.delayed(Duration(seconds: 1));
+    }
   }
 
   @override
@@ -82,9 +119,11 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
   }
 
   @override
-  void dispose() {
+  void dispose() async{
     onExitFromActingRoutine();
-    // Call the superclass dispose method
+    audioDeviceCheckTimerExit = true;
+    BluetoothDeviceService.dispose();
+    requireRestoringConnection = true;
     WidgetsBinding.instance.removeObserver(this); // Observer 해제
     super.dispose();
   }
@@ -358,10 +397,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     return allConnectedAudioDevices[0];
   }
 
-  onPressedRecordingBtn(
-      LanguageControl languageControl, ActingOwner btnOwner) async {
-    //Presetting
-    textToSpeechControl.stop();
+  onPressedRecordingBtn(LanguageControl languageControl, ActingOwner btnOwner) async {
     nowActingOwner = btnOwner;
     bool isMine = btnOwner == ActingOwner.me;
     bool isConditionReady = await allConditionCheck();
@@ -375,6 +411,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
       onExitFromActingRoutine();
       return;
     }
+    isMicRoutinePlaying = true;
     //Finding valid ble device by HFP device name
     String targetDeviceName = properAudioDevice.name;
     String targetDeviceRemoteID = properAudioDevice.address;
@@ -385,10 +422,10 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
       AudioDeviceService.setAudioRouteMobile();
     } else {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+      await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/micScreenOn");
     }
     await Future.delayed(const Duration(milliseconds: 1500));
 
-    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/micScreenOn");
 
     //음성인식 시작
     textToSpeechControl.changeLanguage(isMine
@@ -417,14 +454,6 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     }
     setState(() {});
 
-
-    //BLE 디바이스로 전송
-    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
-    String translatedStr = languageControl.yourStr.trim();
-    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
-    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, fullMsgToSend);
-    await Future.delayed(const Duration(milliseconds: 700));
-
     if (isMine) {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
     } else {
@@ -433,13 +462,20 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     await Future.delayed(const Duration(milliseconds: 1500));
     //perform text to speech
     String strToSpeech =
-        isMine ? languageControl.yourStr : languageControl.myStr;
+    isMine ? languageControl.yourStr : languageControl.myStr;
     LanguageItem toLangItem = isMine
         ? languageControl.nowYourLanguageItem
         : languageControl.nowMyLanguageItem;
-    await textToSpeechControl.speakWithLanguage(
+    textToSpeechControl.speakWithLanguage(
         strToSpeech.trim(), toLangItem.speechLocaleId);
-    await Future.delayed(const Duration(milliseconds: 500));
+
+    //BLE 디바이스로 전송
+    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
+    String translatedStr = languageControl.yourStr.trim();
+    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
+    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, fullMsgToSend);
+    await Future.delayed(const Duration(milliseconds: 700));
+
 
     onExitFromActingRoutine();
 
@@ -487,6 +523,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     nowActingOwner = ActingOwner.nobody;
     BluetoothDeviceService.stopScan();
     AudioDeviceService.setAudioRouteMobile();
+    isMicRoutinePlaying = false;
   }
 
   Future<void> navigateToBluetoothSettings() async {
