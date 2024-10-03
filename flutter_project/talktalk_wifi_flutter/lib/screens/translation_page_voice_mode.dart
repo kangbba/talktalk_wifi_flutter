@@ -60,6 +60,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
   bool audioDeviceCheckTimerExit = false;
   bool isMicRoutinePlaying = false;
 
+
   @override
   void initState() {
     super.initState();
@@ -421,11 +422,12 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     if (isMine) {
       debugLog("내 라우팅");
       AudioDeviceService.setAudioRouteMobile();
+      await Future.delayed(const Duration(milliseconds: 1500));
     } else {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+      await Future.delayed(const Duration(milliseconds: 1500));
       await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/micScreenOn");
     }
-    await Future.delayed(const Duration(milliseconds: 1500));
 
 
     //음성인식 시작
