@@ -75,7 +75,15 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     languageControl.initLanguageControl('ko');
     textToSpeechControl.initTextToSpeech();
     debugLog("언어 설정 로드 및 언어 관리 초기화 완료");
+    _registerBluetoothAction();
     // 타이머 시작
+  }
+  void _registerBluetoothAction() {
+    BluetoothDeviceService.onAskMicAction = () {
+      debugLog('"/askMic" 메시지가 감지되어 액션이 실행되었습니다.');
+      onPressedRecordingBtn(languageControl, ActingOwner.you);
+      // 여기서 실제 실행할 동작
+    };
   }
 // 타이머 시작 함수
   void _startAudioDeviceCheckTimer() async{
@@ -94,28 +102,28 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
         await Future.delayed(Duration(seconds: 1));
         continue;
       }
-      //List<AudioDevice> allConnectedAudioDevices = await AudioDeviceService.getConnectedAudioDevicesByPrefixAndType(PRODUCT_PREFIX, 7);
-      String? savedRemoteID = await BluetoothDeviceService.getSavedRemoteId();
-      if(savedRemoteID == null) {
+      List<AudioDevice> allConnectedAudioDevices = await AudioDeviceService.getConnectedAudioDevicesByPrefixAndType(PRODUCT_PREFIX, 7);
+      if(allConnectedAudioDevices.length != 1) {
     //    debugLog("savedRemoteID 이 없으므로 대기중");
         await Future.delayed(Duration(seconds: 1));
         continue;
       }
 
-      bool success = await BluetoothDeviceService.writeMsgToCurrentBleDevice(savedRemoteID, "/connectedScreenOn");
+      bool success = await BluetoothDeviceService.writeMsgToCurrentBleDevice(allConnectedAudioDevices[0].address, "/connectedScreenOn");
       debugLog("장치가 연결되었으며, 메시지를 보냈습니다. success : ${success}");
       requireRestoringConnection = !success;
       await Future.delayed(Duration(seconds: 1));
     }
   }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       debugLog("사용자가 pause를 호출");
+      AudioDeviceService.setAudioRouteMobile();
     }
     else if (state == AppLifecycleState.resumed) {
       debugLog("사용자가 resumed 호출");
+      _registerBluetoothAction();
     }
   }
 
@@ -291,8 +299,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     );
   }
 
-  Future<String> showVoicePopUp(
-      ActingOwner btnOwner, Function onCanceledAction) async {
+  Future<String> showVoicePopUp(ActingOwner btnOwner, Function onCanceledAction) async {
     isVoicePopUpOn = true;
     LanguageItem fromLangItem = btnOwner == ActingOwner.me
         ? languageControl.nowMyLanguageItem
@@ -320,8 +327,9 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
                         : "Listening ...",
                     onCompleted: () => onExitFromActingRoutine(),
                     onCanceled: () async {
-                      onExitFromActingRoutine();
+                      debugLog("취소시 작업");
                       await onCanceledAction(); // Invoke the passed cancel action
+                      onExitFromActingRoutine();
                     }),
               ),
             );
@@ -400,6 +408,12 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
   }
 
   onPressedRecordingBtn(LanguageControl languageControl, ActingOwner btnOwner) async {
+    if(isMicRoutinePlaying){
+      debugLog("이미 실행중");
+      return;
+    }
+    isMicRoutinePlaying = true;
+
     nowActingOwner = btnOwner;
     bool isMine = btnOwner == ActingOwner.me;
     bool isConditionReady = await allConditionCheck();
@@ -413,7 +427,6 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
       onExitFromActingRoutine();
       return;
     }
-    isMicRoutinePlaying = true;
     //Finding valid ble device by HFP device name
     String targetDeviceName = properAudioDevice.name;
     String targetDeviceRemoteID = properAudioDevice.address;
@@ -436,7 +449,12 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
         : languageControl.nowMyLanguageItem.speechLocaleId);
     String speechStr = await showVoicePopUp(
           btnOwner,
-          () => onExitFromActingRoutine());
+          () {
+            if(btnOwner == ActingOwner.you){
+              debugLog("CANCELED");
+              BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/mainScreenOn");
+            }
+          });
     //음성인식 완료 처리
     if (speechStr.isEmpty) {
       onExitFromActingRoutine();

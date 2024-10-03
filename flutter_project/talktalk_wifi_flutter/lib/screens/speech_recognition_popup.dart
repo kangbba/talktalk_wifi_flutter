@@ -6,6 +6,7 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:simple_ripple_animation/simple_ripple_animation.dart';
 
 import '../languages/language_control.dart';
+import '../utils/utils.dart';
 
 class SpeechRecognitionPopUp extends StatefulWidget {
   final String titleText;
@@ -161,7 +162,7 @@ class _SpeechRecognitionPopUpState extends State<SpeechRecognitionPopUp> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      onPopInvokedWithResult: (popDisposition, result) async => false, // 뒤로 가기 버튼 무력화
+      canPop: false,
       child: Padding(
         padding: const EdgeInsets.all(22.0),
         child: Column(
