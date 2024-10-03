@@ -84,19 +84,19 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     while (!audioDeviceCheckTimerExit){
       // 여기에서 주기적으로 실행할 작업을 수행 대기 (1초)
       if(!requireRestoringConnection){
-        debugLog("requireRestoringConnection 이 필요없는 상태이므로 대기중");
+       // debugLog("requireRestoringConnection 이 필요없는 상태이므로 대기중");
         await Future.delayed(Duration(seconds: 1));
         continue;
       }
       if(isMicRoutinePlaying){
-        debugLog("isMicRoutinePlaying 이므로 대기중");
+     //   debugLog("isMicRoutinePlaying 이므로 대기중");
         await Future.delayed(Duration(seconds: 1));
         continue;
       }
       //List<AudioDevice> allConnectedAudioDevices = await AudioDeviceService.getConnectedAudioDevicesByPrefixAndType(PRODUCT_PREFIX, 7);
       String? savedRemoteID = await BluetoothDeviceService.getSavedRemoteId();
       if(savedRemoteID == null) {
-        debugLog("savedRemoteID 이 없으므로 대기중");
+    //    debugLog("savedRemoteID 이 없으므로 대기중");
         await Future.delayed(Duration(seconds: 1));
         continue;
       }
@@ -455,6 +455,12 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     }
     setState(() {});
 
+    //BLE 디바이스로 전송
+    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
+    String translatedStr = languageControl.yourStr.trim();
+    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
+    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, fullMsgToSend);
+    await Future.delayed(const Duration(milliseconds: 1500));
     if (isMine) {
       AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
     } else {
@@ -467,14 +473,9 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     LanguageItem toLangItem = isMine
         ? languageControl.nowYourLanguageItem
         : languageControl.nowMyLanguageItem;
-    textToSpeechControl.speakWithLanguage(
+    await textToSpeechControl.speakWithLanguage(
         strToSpeech.trim(), toLangItem.speechLocaleId);
 
-    //BLE 디바이스로 전송
-    LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
-    String translatedStr = languageControl.yourStr.trim();
-    String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
-    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, fullMsgToSend);
     await Future.delayed(const Duration(milliseconds: 700));
 
 
