@@ -189,7 +189,7 @@ public class DeviceManager {
             audioManager.startBluetoothSco();
             audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
 
-            audioManager.setSpeakerphoneOn(false); // call AFTER setMode
+          //  audioManager.setSpeakerphoneOn(false); // call AFTER setMode
             audioManager.setCommunicationDevice(selectedDevice);
             System.out.println("Audio route successfully set to " + selectedDevice.getProductName());
             return true;

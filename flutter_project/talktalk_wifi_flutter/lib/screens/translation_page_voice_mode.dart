@@ -4,9 +4,7 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:talktalk_wifi_flutter/utils/loading_dialog.dart';
 import 'package:provider/provider.dart';
 import '../secrets/secret_device_keys.dart';
 import '../screens/speech_recognition_popup.dart';
@@ -25,7 +23,6 @@ import '../utils/menuconfig.dart';
 import '../utils/utils.dart';
 import '../widgets/recording_btn.dart';
 import '../widgets/translation_area.dart';
-import 'audio_test.dart';
 
 enum ActingOwner {
   nobody,
@@ -59,6 +56,7 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
   late bool requireRestoringConnection;
   bool audioDeviceCheckTimerExit = false;
   bool isMicRoutinePlaying = false;
+  bool useDevice = false;
 
 
   @override
@@ -145,7 +143,26 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
         builder: (context, languageControl, child) {
           return Column(
             children: [
-              Container(height: 70, color: Colors.black12),
+              Container(height: 70, color: Colors.black12,
+                child : Align(
+                    alignment: Alignment.bottomRight,
+                    child :
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text("DEVICE ON ", style: TextStyle(fontSize: 10),),
+                          Switch(
+                            value: useDevice,
+                            onChanged: (bool value) {
+                              setState(() {
+                                useDevice = value;
+                              });
+                            },
+                          ),
+                        ],
+                      )
+                ),
+              ),
               Expanded(
                 child: TranslationArea(
                   textColor: (languageControl.myStr.isEmpty
@@ -208,9 +225,6 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
                   ],
                 ),
               ),
-              if (isRoutingTest)
-                AudioTest().buildAudioControlRow(
-                    context, textToSpeechControl, languageControl),
             ],
           );
         },
@@ -422,25 +436,31 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
       return;
     }
 
-    AudioDevice? properAudioDevice = await findProperAudioDevice();
-    if (properAudioDevice == null) {
-      onExitFromActingRoutine();
-      return;
-    }
-    //Finding valid ble device by HFP device name
-    String targetDeviceName = properAudioDevice.name;
-    String targetDeviceRemoteID = properAudioDevice.address;
+    String targetDeviceName = '';
+    String targetDeviceRemoteID = '';
+    if(useDevice){
+      AudioDevice? properAudioDevice = await findProperAudioDevice();
+      if (properAudioDevice == null) {
+        onExitFromActingRoutine();
+        return;
+      }
+      //Finding valid ble device by HFP device name
+      targetDeviceName = properAudioDevice.name;
+      targetDeviceRemoteID = properAudioDevice.address;
 
-    //말하기를 위한 라우팅 제어
-    if (isMine) {
-      debugLog("내 라우팅");
-      AudioDeviceService.setAudioRouteMobile();
-      await Future.delayed(const Duration(milliseconds: 1500));
-    } else {
-      AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
-      await Future.delayed(const Duration(milliseconds: 1500));
-      await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/micScreenOn");
+      //말하기를 위한 라우팅 제어
+      if (isMine) {
+        debugLog("내 라우팅");
+        AudioDeviceService.setAudioRouteMobile();
+        await Future.delayed(const Duration(milliseconds: 1000));
+      } else {
+        AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+        await Future.delayed(const Duration(milliseconds: 1000));
+        await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/micScreenOn");
+      }
     }
+
+
 
 
     //음성인식 시작
@@ -452,7 +472,11 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
           () {
             if(btnOwner == ActingOwner.you){
               debugLog("CANCELED");
-              BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, "/mainScreenOn");
+
+              if(useDevice) {
+                BluetoothDeviceService.writeMsgToCurrentBleDevice(
+                    targetDeviceRemoteID, "/mainScreenOn");
+              }
             }
           });
     //음성인식 완료 처리
@@ -479,14 +503,19 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     LanguageItem targetLanguageItem = languageControl.nowYourLanguageItem;
     String translatedStr = languageControl.yourStr.trim();
     String fullMsgToSend = "${targetLanguageItem.uniqueId}:$translatedStr;";
-    await BluetoothDeviceService.writeMsgToCurrentBleDevice(targetDeviceRemoteID, fullMsgToSend);
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (isMine) {
-      AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
-    } else {
-      AudioDeviceService.setAudioRouteMobile();
+
+
+    if(useDevice) {
+      await BluetoothDeviceService.writeMsgToCurrentBleDevice(
+          targetDeviceRemoteID, fullMsgToSend);
+      await Future.delayed(const Duration(milliseconds: 1000));
+      if (isMine) {
+        AudioDeviceService.setAudioRouteESPHFP(targetDeviceName);
+      } else {
+        AudioDeviceService.setAudioRouteMobile();
+      }
+      await Future.delayed(const Duration(milliseconds: 1000));
     }
-    await Future.delayed(const Duration(milliseconds: 1500));
     //perform text to speech
     String strToSpeech =
     isMine ? languageControl.yourStr : languageControl.myStr;
@@ -501,15 +530,6 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
 
     onExitFromActingRoutine();
 
-    // 자동 전환 기능 추가
-    if (autoSwitchSpeaker) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          onPressedRecordingBtn(languageControl,
-              btnOwner == ActingOwner.me ? ActingOwner.you : ActingOwner.me);
-        }
-      });
-    }
   }
 
   Future<bool> translateWithNowStatus(bool isMine) async {
@@ -543,8 +563,10 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
 
   void onExitFromActingRoutine() async {
     nowActingOwner = ActingOwner.nobody;
-    BluetoothDeviceService.stopScan();
-    AudioDeviceService.setAudioRouteMobile();
+    if(useDevice){
+      BluetoothDeviceService.stopScan();
+      AudioDeviceService.setAudioRouteMobile();
+    }
     isMicRoutinePlaying = false;
   }
 
@@ -555,23 +577,4 @@ class _TranslatePageVoiceModeState extends State<TranslatePageVoiceMode>
     await intent.launch();
   }
 
-  // Future<void> registerMicAskListener(BluetoothDevice bleDevice) async{
-  //   // 서비스와 캐릭터리스틱 검색
-  //   List<BluetoothService> services = await bleDevice.discoverServices();
-  //   var targetService = services.firstWhere(
-  //         (service) => service.uuid == SERVICE_UUID,
-  //     orElse: () => throw Exception('Service not found'),
-  //   );
-  //
-  //   var txCharacteristic = targetService.characteristics.firstWhere(
-  //         (characteristic) => characteristic.uuid == CHARACTERISTIC_UUID_TX,
-  //     orElse: () => throw Exception('TX Characteristic not found'),
-  //   );
-  //
-  //   // 알림 리스너 등록
-  //   await BluetoothDeviceService().registerNotification(txCharacteristic, (){
-  //     onExitFromActingRoutine();
-  //     onPressedRecordingBtn(languageControl, ActingOwner.you);
-  //   } );
-  // }
 }
